@@ -287,6 +287,14 @@ class SocketView {
             return ::ioctlsocket(sockfd, FIONBIO, &arg) == 0;
         }
         [[nodiscard]]
+        bool setopt(int level, int opt, const void *v, socklen_t len) {
+            return ::setsockopt(sockfd, level, opt, static_cast<const byte_t*>(v), len) == 0;
+        }
+        [[nodiscard]]
+        bool getopt(int level, int opt, void *v, socklen_t *len) const {
+            return ::getsockopt(sockfd, level, opt, static_cast<byte_t*>(v), len) == 0;
+        }
+        [[nodiscard]]
         bool valid() const noexcept {
             return sockfd != ILLIAS_INVALID_SOCKET;
         }
@@ -340,6 +348,13 @@ class SocketView {
         socket_t fd() const noexcept {
             return sockfd;
         }
+
+        bool operator ==(const SocketView &other) const noexcept {
+            return sockfd == other.sockfd;
+        }
+        bool operator !=(const SocketView &other) const noexcept {
+            return sockfd != other.sockfd;
+        }
     protected:
         socket_t sockfd = ILLIAS_INVALID_SOCKET;
 };
@@ -355,7 +370,7 @@ class Socket : public SocketView {
             sockfd = sock.release();
         }
         ~Socket() {
-            [[may_unused]] auto m = close();
+            [[maybe_unused]] auto m = close();
         }
 
         [[nodiscard]]
@@ -365,7 +380,7 @@ class Socket : public SocketView {
             return fd;
         }
         void     reset(socket_t nsock = ILLIAS_INVALID_SOCKET) {
-            [[may_unused]] auto m = close();
+            [[maybe_unused]] auto m = close();
             sockfd = nsock;
         }
 
@@ -452,6 +467,19 @@ inline bool InitSocket() {
 }
 inline bool QuitSocket() {
     return ::WSACleanup();
+}
+
+inline uint16_t HostToNetwork(uint16_t t) {
+    return ::htons(t);
+}
+inline uint32_t HostToNetwork(uint32_t t) {
+    return ::htonl(t);
+}
+inline uint16_t NetworkToHost(uint16_t t) {
+    return ::ntohs(t);
+}
+inline uint32_t NetworkToHost(uint32_t t) {
+    return ::ntohl(t);
 }
 
 ILLIAS_NS_END

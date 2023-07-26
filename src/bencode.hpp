@@ -1,14 +1,9 @@
 #pragma once
 
-#include "illias.hpp"
+#include <variant>
 #include <vector>
 #include <string>
-#include <variant>
-#include <ostream>
-#include <span>
 #include <map>
-
-using namespace Illias;
 
 class BenObject {
     public:
@@ -132,43 +127,3 @@ class BenObject {
         Storage data;
     friend std::ostream &operator <<(std::ostream &, const BenObject &object);
 };
-
-class KNode {
-    public:
-        std::string id; //< NodeID
-        IPEndpoint  endpoint; //< Endpoint  
-};
-
-class DHTClient {
-    public:
-        DHTClient();
-        ~DHTClient();
-
-        void run();
-    private:
-        using String = std::string;
-
-        void bootstrap();
-        void recv_data();
-        void on_message(const BenObject &message, const IPEndpoint &endpoint);
-        void on_find_node_response(const BenObject &message, const IPEndpoint &endpoint);
-        void on_get_peers_request(const BenObject &message, const IPEndpoint &endpoint);
-        void on_announce_peer_request(const BenObject &message, const IPEndpoint &endpoint);
-        void on_ping_request(const BenObject &message, const IPEndpoint &endpoint);
-        void send_krpc(const BenObject &message, const IPEndpoint &endpoint);
-        void send_find_node(const IPEndpoint &endpoint, const String &id, const String &target);
-        void send_ping(const KNode &node);
-
-        Socket sock; //< For send and recevie data
-        pollfd pfd;
-
-        IPEndpoint local_endpoint;
-        String     local_id; //< Self id
-
-        std::map<String, KNode> knodes; //< Node List
-};
-
-inline std::ostream &operator <<(std::ostream &s, const BenObject &object) {
-    object.dump_impl(s, 0);
-    return s;
-}

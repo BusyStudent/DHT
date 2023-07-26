@@ -1,11 +1,19 @@
 add_rules("mode.debug", "mode.release")
+add_requires("gtest")
 
 set_languages("c++23")
-target("test")
-    set_kind("binary")
-    add_files("*.cpp")
-    add_files("*.c")
 
+target("main")
+    set_kind("binary")
+    add_files("src/*.cpp")
+    add_files("src/*.c")
+    add_files("main.cpp")
+target("test")
+    add_packages("gtest")
+    set_kind("binary")
+    add_files("src/*.cpp")
+    add_files("src/*.c")
+    add_files("test.cpp")
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --
