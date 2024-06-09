@@ -1,11 +1,13 @@
 #pragma once
 
-#include <array>
-#include <random>
 #include <cstdint>
+#include <random>
+#include <array>
 #include <span>
 #include <bit>
 #include "sha1.h"
+
+// NOTE: in (self ^ node).clz() is bigger, the node is more closer to the self
 
 /**
  * @brief 160 bits Node Id
@@ -35,6 +37,13 @@ public:
      * @return std::string_view 
      */
     auto toStringView() const -> std::string_view;
+    /**
+     * @brief Calc the distance with the node
+     * 
+     * @param id 
+     * @return size_t 0 on self, 160 on max, smaller is closer
+     */
+    auto distance(const NodeId &id) -> size_t;
     /**
      * @brief Assign the node id
      * 
@@ -74,12 +83,28 @@ public:
      */
     static auto from(const void *mem, size_t n) -> NodeId;
     /**
+     * @brief Create node id from a memory buffer
+     * 
+     * @tparam ize_t 
+     * @return NodeId 
+     */
+    template <size_t N>
+    static auto from(const char (&mem)[N]) -> NodeId;
+    /**
      * @brief Create node id from hex string
      * 
      * @param hexString 
      * @return NodeId 
      */
     static auto fromHex(std::string_view hexString) -> NodeId;
+    /**
+     * @brief Create node id from hex string
+     * 
+     * @tparam N 
+     * @return NodeId 
+     */
+    template <size_t N>
+    static auto fromHex(const char (&hexString)[N]) -> NodeId;
 private:
     std::array<uint8_t, 20> mId;
 };
@@ -100,6 +125,10 @@ inline auto NodeId::toHex() const -> std::string {
         ::sprintf(buffer.data() + i * 2, "%02x", mId[i]);
     }
     return buffer;
+}
+inline auto NodeId::distance(const NodeId &id) -> size_t {
+    auto d = (*this) ^ id;
+    return 160 - d.clz();
 }
 inline auto NodeId::toStringView() const -> std::string_view {
     return std::string_view(
@@ -149,6 +178,11 @@ inline auto NodeId::from(const void *mem, size_t n) -> NodeId {
     }
     return id;
 }
+template <size_t N>
+inline auto NodeId::from(const char (&mem)[N]) -> NodeId {
+    static_assert(N == 21, "Node id must be 20 bytes");
+    return from(mem, 20);
+}
 inline auto NodeId::fromHex(std::string_view hexString) -> NodeId {
     if (hexString.size() != 40) {
         return zero();
@@ -162,4 +196,9 @@ inline auto NodeId::fromHex(std::string_view hexString) -> NodeId {
         }
     }
     return id;
+}
+template <size_t N>
+inline auto NodeId::fromHex(const char (&hexString)[N]) -> NodeId {
+    static_assert(N == 41, "Hex string must be 40 characters");
+    return fromHex(std::string_view(hexString));
 }

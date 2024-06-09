@@ -48,6 +48,12 @@ public:
      * 
      * @param str 
      */
+    BenObject(const std::string &str) : mData(str) { }
+    /**
+     * @brief Construct a new string Ben Object object
+     * 
+     * @param str 
+     */
     BenObject(const char *str) : mData(str) { }
     /**
      * @brief Construct a new List Ben Object object
@@ -132,6 +138,12 @@ public:
      */
     auto toDict() const -> const Dict & { return std::get<Dict>(mData); }
     /**
+     * @brief To human readable debug string
+     * 
+     * @return std::string 
+     */
+    auto toDebugString() const -> std::string;
+    /**
      * @brief Get the element size
      * 
      * @return size_t 
@@ -172,12 +184,28 @@ public:
         return std::get<Dict>(mData)[key];
     }
     /**
+     * @brief Index the value if is a dict
+     * 
+     * @param key 
+     * @return const BenObject& 
+     */
+    auto operator [](std::string_view key) const -> const BenObject & {
+        static BenObject null;
+        auto &dict = std::get<Dict>(mData);
+        auto iter = dict.find(key);
+        if (iter == dict.end()) return null;
+        return iter->second;
+    }
+    /**
      * @brief Indexing the element
      * 
      * @param idx 
      * @return BenObject& 
      */
     auto operator [](size_t idx) -> BenObject & {
+        return std::get<List>(mData).at(idx);
+    }
+    auto operator [](size_t idx) const -> const BenObject & {
         return std::get<List>(mData).at(idx);
     }
     /**
@@ -194,6 +222,14 @@ public:
     static auto decode(std::string_view str) -> BenObject;
     static auto decode(const void *buffer, size_t n) -> BenObject;
     static auto decodeIn(std::string_view &current) -> BenObject;
+    /**
+     * @brief Create a string ben object from a raw memory
+     * 
+     * @param buf 
+     * @param n 
+     * @return BenObject 
+     */
+    static auto fromRawAsString(const void *buf, size_t n) -> BenObject;
 private:
     std::variant<
         std::monostate,
@@ -347,4 +383,10 @@ inline auto BenObject::decode(std::string_view view) -> BenObject {
 }
 inline auto BenObject::decode(const void *buffer, size_t n) -> BenObject {
     return decode(std::string_view(static_cast<const char *>(buffer), n));
+}
+inline auto BenObject::fromRawAsString(const void *mem, size_t n) -> BenObject {
+    return std::string_view(
+        static_cast<const char *>(mem),
+        n
+    );
 }

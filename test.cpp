@@ -1,5 +1,6 @@
 #include "src/bencode.hpp"
 #include "src/nodeid.hpp"
+#include "src/krpc.hpp"
 #include <gtest/gtest.h>
 
 TEST(Bencode, decode) {
@@ -56,6 +57,19 @@ TEST(Bencode, encode) {
     std::string expectedEncodedRequest = "d1:ad2:id20:mnopqrstuvwxyz123456e1:q4:ping1:t20:abcdefghij01234567891:y1:qe";
     ASSERT_EQ(encodedRequest, expectedEncodedRequest);
 }
+TEST(Bencode, make) {
+    BenObject list {
+        1, "Hello", {
+            "A", 2
+        }
+    };
+    ASSERT_EQ(list.isList(), true);
+    std::cout << list.encode() << std::endl;
+    ASSERT_EQ(list[0], 1);
+    ASSERT_EQ(list[1], "Hello");
+    ASSERT_EQ(list[2][0], "A");
+    ASSERT_EQ(list[2][1], 2);
+}
 TEST(Kad, ID) {
     ASSERT_EQ(NodeId::zero(), NodeId::zero());
 
@@ -65,21 +79,51 @@ TEST(Kad, ID) {
         std::cout << hex << std::endl;
         ASSERT_EQ(NodeId::fromHex(hex), rand);
     }
+    auto a = NodeId::fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+    auto zero = NodeId::zero();
+    std::cout << (a ^ a).toHex() << std::endl;
+    std::cout << (a ^ zero).clz() << std::endl;
+
+    ASSERT_EQ((a ^ a).clz(), 160);
+    ASSERT_EQ((a ^ zero).clz(), 0);
+
+    // Self distance is 0
+    auto rand = NodeId::rand();
+    ASSERT_EQ(rand.distance(rand), 0);
 }
-// TEST(Kad, Table) {
-//     KTable table;
-//     table.set_local_id(KID::Random());
 
-//     auto a = KID::Random();
-//     auto b = KID::Zero();
+TEST(Kad, Rpc) {
+    auto query = PingQuery{
+        .transId = 0,
+        .selfId = NodeId::fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+    };
+    auto msg = query.toMessage();
+    auto q = PingQuery::fromMessage(msg);
 
-//     a[19] = 1;
-//     b[0]  = 1;
+    ASSERT_EQ(IsQueryMessage(msg), true);
+    ASSERT_EQ(query, q);
+    std::cout << msg.encode() << std::endl;
 
-//     table.alloc_node(a);
-//     table.alloc_node(b);
-//     table.find_closest_node(KID::Random());
-// }
+    // Parse for ping reply and request
+    auto pingQueryEncoded = "d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y1:qe";
+    auto pingQuery = PingQuery::fromMessage(BenObject::decode(pingQueryEncoded));
+    ASSERT_EQ(pingQuery.toMessage().encode(), pingQueryEncoded);
+    ASSERT_EQ(pingQuery.selfId, NodeId::from("abcdefghij0123456789"));
+
+    auto pingReplyEncoded = "d1:rd2:id20:mnopqrstuvwxyz123456e1:t2:aa1:y1:re";
+    auto pingReply = PingReply::fromMessage(BenObject::decode(pingReplyEncoded));
+    ASSERT_EQ(pingReply.toMessage().encode(), pingReplyEncoded);
+    ASSERT_EQ(pingReply.peerId, NodeId::from("mnopqrstuvwxyz123456"));
+
+    // Parse for error reply
+    auto errorEncoded = ("d1:eli201e23:A Generic Error Ocurrede1:t2:aa1:y1:ee");
+    auto errorReply = ErrorReply::fromMessage(BenObject::decode(errorEncoded));
+    std::cout << errorReply.error << std::endl;
+    ASSERT_EQ(errorReply.error, "A Generic Error Ocurred");
+    ASSERT_EQ(errorReply.errorCode, 201);
+
+    ASSERT_EQ(errorReply.toMessage().encode(), errorEncoded);
+}
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
