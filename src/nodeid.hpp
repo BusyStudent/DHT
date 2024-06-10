@@ -43,7 +43,7 @@ public:
      * @param id 
      * @return size_t 0 on self, 160 on max, smaller is closer
      */
-    auto distance(const NodeId &id) -> size_t;
+    auto distance(const NodeId &id) const -> size_t;
     /**
      * @brief Assign the node id
      * 
@@ -126,7 +126,7 @@ inline auto NodeId::toHex() const -> std::string {
     }
     return buffer;
 }
-inline auto NodeId::distance(const NodeId &id) -> size_t {
+inline auto NodeId::distance(const NodeId &id) const -> size_t {
     auto d = (*this) ^ id;
     return 160 - d.clz();
 }

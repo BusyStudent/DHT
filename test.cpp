@@ -95,7 +95,7 @@ TEST(Kad, ID) {
 TEST(Kad, Rpc) {
     auto query = PingQuery{
         .transId = 0,
-        .selfId = NodeId::fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+        .id = NodeId::fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     };
     auto msg = query.toMessage();
     auto q = PingQuery::fromMessage(msg);
@@ -108,12 +108,12 @@ TEST(Kad, Rpc) {
     auto pingQueryEncoded = "d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y1:qe";
     auto pingQuery = PingQuery::fromMessage(BenObject::decode(pingQueryEncoded));
     ASSERT_EQ(pingQuery.toMessage().encode(), pingQueryEncoded);
-    ASSERT_EQ(pingQuery.selfId, NodeId::from("abcdefghij0123456789"));
+    ASSERT_EQ(pingQuery.id, NodeId::from("abcdefghij0123456789"));
 
     auto pingReplyEncoded = "d1:rd2:id20:mnopqrstuvwxyz123456e1:t2:aa1:y1:re";
     auto pingReply = PingReply::fromMessage(BenObject::decode(pingReplyEncoded));
     ASSERT_EQ(pingReply.toMessage().encode(), pingReplyEncoded);
-    ASSERT_EQ(pingReply.peerId, NodeId::from("mnopqrstuvwxyz123456"));
+    ASSERT_EQ(pingReply.id, NodeId::from("mnopqrstuvwxyz123456"));
 
     // Parse for error reply
     auto errorEncoded = ("d1:eli201e23:A Generic Error Ocurrede1:t2:aa1:y1:ee");

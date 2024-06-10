@@ -11,6 +11,10 @@ enum class MessageType {
     Error,
     Unknown,
 };
+struct NodeInfo {
+    NodeId id;
+    IPEndpoint endpoint;
+};
 
 inline auto GetMessageType(const BenObject &msg) -> MessageType {
     auto y = msg["y"];
@@ -72,7 +76,7 @@ inline auto FillMessageTransactionId(BenObject &msg, uint16_t id) -> void {
  */
 struct PingQuery {
     uint16_t transId = 0;
-    NodeId   selfId;
+    NodeId   id;
 
     auto operator <=>(const PingQuery &) const = default;
     /**
@@ -87,7 +91,7 @@ struct PingQuery {
         msg["q"] = "ping";
 
         msg["a"] = BenDict();
-        msg["a"]["id"] = selfId.toStringView();
+        msg["a"]["id"] = id.toStringView();
         return msg;
     }
     static auto fromMessage(const BenObject &msg) -> PingQuery {
@@ -98,7 +102,7 @@ struct PingQuery {
 
         return {
             .transId = GetMessageTransactionId(msg),
-            .selfId = nId
+            .id = nId
         };
     }
 };
@@ -108,7 +112,7 @@ struct PingQuery {
  */
 struct PingReply {
     uint16_t transId = 0;
-    NodeId   peerId;
+    NodeId   id;
 
     auto operator <=>(const PingReply &) const = default;
     auto toMessage() const -> BenObject {
@@ -116,7 +120,7 @@ struct PingReply {
         msg["t"] = BenObject::fromRawAsString(&transId, sizeof(transId));
         msg["y"] = "r";
         msg["r"] = BenDict();
-        msg["r"]["id"] = peerId.toStringView();
+        msg["r"]["id"] = id.toStringView();
         return msg;
     }
     static auto fromMessage(const BenObject &msg) -> PingReply {
@@ -127,14 +131,14 @@ struct PingReply {
 
         return {
             .transId = GetMessageTransactionId(msg),
-            .peerId = nId
+            .id = nId
         };
     }
 };
 
 struct FindNodeQuery {
     uint16_t transId = 0;
-    NodeId   selfId;
+    NodeId   id; //< witch node send this query
     NodeId   targetId; //< Target NodeId
 
     auto operator <=>(const FindNodeQuery &) const = default;
@@ -145,7 +149,7 @@ struct FindNodeQuery {
         msg["q"] = "find_node";
 
         msg["a"] = BenDict();
-        msg["a"]["id"] = selfId.toStringView();
+        msg["a"]["id"] = id.toStringView();
         msg["a"]["target"] = targetId.toStringView();
         return msg;
     };
@@ -153,8 +157,8 @@ struct FindNodeQuery {
 
 struct FindNodeReply {
     uint16_t transId = 0;
-    NodeId   targetId;
-    std::vector<std::pair<NodeId, IPEndpoint> > nodes; //< Id: IP: Port
+    NodeId   id; //< witch node give this reply
+    std::vector<NodeInfo> nodes; //< Id: IP: Port
 
     auto operator <=>(const FindNodeReply &) const = default;
     static auto fromMessage(const BenObject &msg) -> FindNodeReply {
@@ -162,9 +166,9 @@ struct FindNodeReply {
 
         FindNodeReply reply;
         reply.transId = GetMessageTransactionId(msg);
-        auto targetId = msg["r"]["id"].toString();
-        assert(targetId.size() == 20);
-        reply.targetId = NodeId::from(targetId.data(), targetId.size());
+        auto id = msg["r"]["id"].toString();
+        assert(id.size() == 20);
+        reply.id = NodeId::from(id.data(), id.size());
 
         // Parse response nodes
         for (auto &node : msg["r"]["nodes"].toList()) {
