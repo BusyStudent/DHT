@@ -6,7 +6,7 @@
 #include <print>
 
 #ifndef DHT_LOG
-#define DHT_LOG(fmt, ...) std::println("[DHT] " fmt, __VA_ARGS__)
+#define DHT_LOG(fmt, ...) std::println(stderr, "[DHT] " fmt, __VA_ARGS__)
 #endif
 
 // https://www.bittorrent.org/beps/bep_0005.html
@@ -105,6 +105,7 @@ struct RoutingTable {
             // Try again ?
             if (!bucket.canInsert()) {
                 // Accoreding to the BEP, we should discard it
+                DHT_LOG("too much node in bucket[{}], id: {} endpoint: {} discard", distance, id.toHex(), endpoint.toString());
                 return nullptr;
             }
             auto newNode = std::make_unique<Node>();
@@ -134,13 +135,13 @@ struct RoutingTable {
             node->good = false;
         }
     }
-    auto findClosestNodes(const NodeId &id) -> std::vector<Node *> {
+    auto findClosestNodes(const NodeId &id) -> std::vector<NodeInfo> {
         auto distance = self.distance(id);
         auto &bucket = buckets[std::min(distance, buckets.size() - 1)];
 
-        std::vector<Node *> nodes;
+        std::vector<NodeInfo> nodes;
         for (auto &node : bucket.nodes) {
-            nodes.emplace_back(node.get());
+            nodes.emplace_back(*node);
         }
         return nodes;
     }

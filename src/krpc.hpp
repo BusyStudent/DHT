@@ -57,16 +57,19 @@ inline auto IsErrorMessage(const BenObject &msg) -> bool {
  * @brief Get the any message Transaction Id object
  * 
  * @param msg 
- * @return uint16_t 
+ * @return std::string 
  */
-inline auto GetMessageTransactionId(const BenObject &msg) -> uint16_t {
-    auto id = msg["t"].toString();
-    assert(id.size() == 2);
-    auto val = *reinterpret_cast<const uint16_t*>(id.data());
-    return val;
+inline auto GetMessageTransactionId(const BenObject &msg) -> std::string {
+    return msg["t"].toString();
 }
-inline auto FillMessageTransactionId(BenObject &msg, uint16_t id) -> void {
-    auto idStr = BenObject::fromRawAsString(&id, sizeof(id));
+template <typename T>
+inline auto GetMessageTransactionId(const BenObject &msg) -> T {
+    auto str = msg["t"].toString();
+    assert(str.size() == sizeof(T));
+    return *reinterpret_cast<const T*>(str.c_str());
+}
+
+inline auto FillMessageTransactionId(BenObject &msg, std::string_view idStr) -> void {
     msg["t"] = idStr;
 }
 
@@ -75,7 +78,7 @@ inline auto FillMessageTransactionId(BenObject &msg, uint16_t id) -> void {
  * 
  */
 struct PingQuery {
-    uint16_t transId = 0;
+    std::string transId;
     NodeId   id;
 
     auto operator <=>(const PingQuery &) const = default;
@@ -86,7 +89,7 @@ struct PingQuery {
      */
     auto toMessage() const -> BenObject {
         BenObject msg = BenDict();
-        msg["t"] = BenObject::fromRawAsString(&transId, sizeof(transId));
+        msg["t"] = transId;
         msg["y"] = "q";
         msg["q"] = "ping";
 
@@ -111,13 +114,13 @@ struct PingQuery {
  * 
  */
 struct PingReply {
-    uint16_t transId = 0;
+    std::string transId;
     NodeId   id;
 
     auto operator <=>(const PingReply &) const = default;
     auto toMessage() const -> BenObject {
         BenObject msg = BenDict();
-        msg["t"] = BenObject::fromRawAsString(&transId, sizeof(transId));
+        msg["t"] = transId;
         msg["y"] = "r";
         msg["r"] = BenDict();
         msg["r"]["id"] = id.toStringView();
@@ -137,14 +140,14 @@ struct PingReply {
 };
 
 struct FindNodeQuery {
-    uint16_t transId = 0;
+    std::string transId;
     NodeId   id; //< witch node send this query
     NodeId   targetId; //< Target NodeId
 
     auto operator <=>(const FindNodeQuery &) const = default;
     auto toMessage() const -> BenObject {
         BenObject msg = BenDict();
-        msg["t"] = BenObject::fromRawAsString(&transId, sizeof(transId));
+        msg["t"] = transId;
         msg["y"] = "q";
         msg["q"] = "find_node";
 
@@ -153,14 +156,60 @@ struct FindNodeQuery {
         msg["a"]["target"] = targetId.toStringView();
         return msg;
     };
+    static auto fromMessage(const BenObject &msg) -> FindNodeQuery {
+        assert(IsQueryMessage(msg));
+        auto id = msg["a"]["id"].toString();
+        assert(id.size() == 20);
+        auto nId = NodeId::from(id.data(), id.size());
+
+        auto targetId = msg["a"]["target"].toString();
+        assert(targetId.size() == 20);
+        auto nTargetId = NodeId::from(targetId.data(), targetId.size());
+        return {
+            .transId = GetMessageTransactionId(msg),
+            .id = nId,
+            .targetId = nTargetId
+        };
+    }
 };
 
 struct FindNodeReply {
-    uint16_t transId = 0;
+    std::string transId;
     NodeId   id; //< witch node give this reply
     std::vector<NodeInfo> nodes; //< Id: IP: Port
 
     auto operator <=>(const FindNodeReply &) const = default;
+
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenDict();
+        msg["t"] = transId;
+        msg["y"] = "r";
+        msg["r"] = BenDict();
+        msg["r"]["id"] = id.toStringView();
+
+        std::string nodesStr;
+        for (auto &node : nodes) {
+            nodesStr += node.id.toStringView();
+            switch (node.endpoint.family()) {
+                case AF_INET: {
+                    auto addr4 = node.endpoint.address4();
+                    nodesStr += reinterpret_cast<const char*>(&addr4);
+                    break;
+                }
+                case AF_INET6: {
+                    auto addr6 = node.endpoint.address6();
+                    nodesStr += reinterpret_cast<const char*>(&addr6);
+                    break;
+                }
+            }
+            auto port = ::htons(node.endpoint.port());
+            nodesStr += reinterpret_cast<const char*>(&port);
+        }
+        if (!nodesStr.empty()) {
+            msg["r"]["nodes"] = nodesStr;
+        }
+        return msg;
+    }
     static auto fromMessage(const BenObject &msg) -> FindNodeReply {
         assert(IsReplyMessage(msg));
 
@@ -171,29 +220,33 @@ struct FindNodeReply {
         reply.id = NodeId::from(id.data(), id.size());
 
         // Parse response nodes
-        for (auto &node : msg["r"]["nodes"].toList()) {
-            auto &data = node.toString();
-            assert(data.size() == 26); //< NodeId + IP + Port
-            auto id = NodeId::from(data.data(), 20);
-            auto addr = IPAddress::fromRaw(data.data() + 20, 4);
-            auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
-            // Convert port to host
-            port = ntohs(port);
-            reply.nodes.emplace_back(id, IPEndpoint(addr, port));
+        auto &nodesObject = msg["r"]["nodes"];
+        if (nodesObject.isString()) {
+            auto &nodes = nodesObject.toString();
+            for (size_t i = 0; i < nodes.size(); i += 26) {
+                auto data = nodes.substr(i, 26);
+                assert(data.size() == 26); //< NodeId + IP + Port
+                auto id = NodeId::from(data.data(), 20);
+                auto addr = IPAddress::fromRaw(data.data() + 20, 4);
+                auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
+                // Convert port to host
+                port = ntohs(port);
+                reply.nodes.emplace_back(id, IPEndpoint(addr, port));
+            }
         }
         return reply;
     }
 };
 
 struct ErrorReply {
-    uint16_t transId = 0;
+    std::string transId;
     int errorCode = 0;
     std::string error;
 
     auto operator <=>(const ErrorReply &) const = default;
     auto toMessage() const -> BenObject {
         BenObject msg = BenDict();
-        msg["t"] = BenObject::fromRawAsString(&transId, sizeof(transId));
+        msg["t"] = transId;
         msg["y"] = "e";
         msg["e"] = BenObject {
             errorCode,

@@ -17,6 +17,7 @@ public:
             ui.nodeIdEdit->setDisabled(true);
             ui.startButton->setDisabled(true);
             ui.randButton->setDisabled(true);
+            ui.groupBox->setDisabled(false);
 
             start();
         });
@@ -24,8 +25,25 @@ public:
             auto text = NodeId::rand().toHex();
             ui.nodeIdEdit->setText(QString::fromUtf8(text));
         });
+        connect(ui.pingButton, &QPushButton::clicked, this, [this]() {
+            ilias_spawn [this]() -> Task<> {
+                co_await mSession.ping(IPEndpoint(ui.pingEdit->text().toStdString().c_str()));
+                co_return {};
+            }; 
+        });
+        connect(ui.bootstrapButton, &QPushButton::clicked, this, [this]() {
+            ilias_spawn [this]() -> Task<> {
+                co_await mSession.bootstrap(IPEndpoint(ui.bootstrapEdit->text().toStdString().c_str()));
+                co_return {};
+            }; 
+        });
     }
     auto start() -> void {
+        auto idText = ui.nodeIdEdit->text();
+        if (!idText.isEmpty()) {
+            mSession.setNodeId(NodeId::fromHex(idText.toStdString()));
+        }
+        mSession.setBindEndpoint(IPEndpoint(ui.bindEdit->text().toStdString().c_str()));
         mSession.start();   
     }
 private:

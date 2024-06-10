@@ -94,7 +94,7 @@ TEST(Kad, ID) {
 
 TEST(Kad, Rpc) {
     auto query = PingQuery{
-        .transId = 0,
+        .transId = "aa",
         .id = NodeId::fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     };
     auto msg = query.toMessage();
