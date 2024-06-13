@@ -74,9 +74,11 @@ private:
 };
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
     ::SetConsoleCP(65001);
     ::SetConsoleOutputCP(65001);
     std::setlocale(LC_ALL, ".utf-8");
+#endif
 
     QApplication a(argc, argv);
     App w;
