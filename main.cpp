@@ -14,9 +14,9 @@ public:
 
         connect(ui.startButton, &QPushButton::clicked, this, [this]() {
             ui.bindEdit->setDisabled(true);
-            ui.nodeIdEdit->setDisabled(true);
+            // ui.nodeIdEdit->setDisabled(true);
             ui.startButton->setDisabled(true);
-            ui.randButton->setDisabled(true);
+            // ui.randButton->setDisabled(true);
             ui.groupBox->setDisabled(false);
 
             start();
@@ -34,6 +34,27 @@ public:
         connect(ui.bootstrapButton, &QPushButton::clicked, this, [this]() {
             ilias_spawn [this]() -> Task<> {
                 co_await mSession.bootstrap(IPEndpoint(ui.bootstrapEdit->text().toStdString().c_str()));
+                co_return {};
+            }; 
+        });
+        connect(ui.showBucketsButton, &QPushButton::clicked, this, [this]() {
+            auto tree = ui.treeWidget;
+            tree->clear();
+            auto &table = mSession.routingTable();
+            for (size_t i = 0; i < table.buckets.size(); i++) {
+                auto &bucket = table.buckets[i];
+                auto item = new QTreeWidgetItem(tree);
+                item->setText(0, QString::number(i));
+                for (auto &node : bucket.nodes) {
+                    auto subItem = new QTreeWidgetItem(item);
+                    subItem->setText(0, QString::fromStdString(node->id.toHex()));
+                    subItem->setText(1, QString::fromStdString(node->endpoint.toString()));
+                }
+            }
+        });
+        connect(ui.findNodeButton, &QPushButton::clicked, this, [this]() {
+            ilias_spawn [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
+                co_await mSession.findNode(id);
                 co_return {};
             }; 
         });

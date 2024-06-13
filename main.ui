@@ -185,6 +185,42 @@
           </rect>
          </property>
         </widget>
+        <widget class="QLabel" name="label_4">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>120</y>
+           <width>91</width>
+           <height>21</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>NodeId:</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="findNodeEdit">
+         <property name="geometry">
+          <rect>
+           <x>80</x>
+           <y>120</y>
+           <width>221</width>
+           <height>21</height>
+          </rect>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="findNodeButton">
+         <property name="geometry">
+          <rect>
+           <x>310</x>
+           <y>120</y>
+           <width>93</width>
+           <height>28</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Find Node</string>
+         </property>
+        </widget>
        </widget>
       </widget>
       <widget class="QWidget" name="tab_2">
@@ -200,11 +236,47 @@
           <height>531</height>
          </rect>
         </property>
+        <property name="columnCount">
+         <number>5</number>
+        </property>
         <column>
          <property name="text">
           <string notr="true">1</string>
          </property>
         </column>
+        <column>
+         <property name="text">
+          <string notr="true">2</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string notr="true">3</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string notr="true">4</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string notr="true">5</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QPushButton" name="showBucketsButton">
+        <property name="geometry">
+         <rect>
+          <x>840</x>
+          <y>10</y>
+          <width>93</width>
+          <height>28</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Show</string>
+        </property>
        </widget>
       </widget>
      </widget>

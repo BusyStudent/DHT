@@ -22,6 +22,21 @@ public:
     auto start() -> void;
     auto ping(const IPEndpoint &endpoint) -> Task<>;
     auto bootstrap(const IPEndpoint &endpoint) -> Task<>;
+    /**
+     * @brief Find the target node
+     * 
+     * @param targetNodeId 
+     * @return Task<NodeInfo> 
+     */
+    auto findNode(const NodeId &targetNodeId) -> Task<NodeInfo>;
+    /**
+     * @brief Get the Routing Table
+     * 
+     * @return RoutingTable& 
+     */
+    auto routingTable() -> RoutingTable & {
+        return mRoutingTable;
+    }
 private:
     auto _run() -> Task<>;
     auto _bootstrap() -> Task<>;
@@ -97,7 +112,7 @@ private:
     > mIncomingTable {
         {"ping", std::bind(&DhtSession::_onPing, this, std::placeholders::_1, std::placeholders::_2)},
         {"find_node", std::bind(&DhtSession::_onFindNode, this, std::placeholders::_1, std::placeholders::_2)},
-        // {"get_peers", std::bind(&DhtSession::_onGetPeers, this, std::placeholders::_1, std::placeholders::_2)},
+        {"get_peers", std::bind(&DhtSession::_onGetPeers, this, std::placeholders::_1, std::placeholders::_2)},
     };
 
     // Process incoming reply table
@@ -144,16 +159,60 @@ inline auto DhtSession::setNodeId(const NodeId &id) -> void {
     mSelfId = id;
 }
 
+inline auto DhtSession::findNode(const NodeId &id) -> Task<NodeInfo> {
+    auto closest = mRoutingTable.findClosestNodes(id);
+    if (closest.empty()) {
+        co_return Unexpected(Error::Unknown);
+    }
+    std::optional<NodeInfo> goted;
+    for (auto &nodeInfo : closest) {
+        auto ret = co_await _sendFindNode(nodeInfo.endpoint, id);
+        if (!ret) {
+            continue;
+        }
+        if (ret->id == id) {
+            co_return ret;
+        }
+        if (goted) {
+            if (id.distance(goted->id) < id.distance(ret->id)) {
+                goted = ret.value();
+            }
+        }
+        else {
+            goted = ret.value();
+        }
+    }
+    if (goted) {
+        co_return goted.value();
+    }
+    co_return Unexpected(Error::Unknown);
+}
+
 inline auto DhtSession::bootstrap(const IPEndpoint &endpoint) -> Task<> {
     auto targetId = mSelfId;
     DHT_LOG("Begin bootstrap, target id {}", targetId.toHex());
     auto ret = co_await _sendFindNode(endpoint, targetId);
-    if (ret) {
-        DHT_LOG("Bootstrap got closest node {}, distance with target {}", ret->id.toHex(), targetId.distance(ret->id));
-    }
-    else {
+    if (!ret) {
         DHT_LOG("Error for {}", ret.error().toString());
+        co_return {};
     }
+    DHT_LOG("Bootstrap got closest node {}, distance with target {}", ret->id.toHex(), targetId.distance(ret->id));
+
+    // Begin scan and fill the routing table
+    // NodeId id = NodeId::zero();
+    // for (int i = 160; i >= 5; i--) {
+    //     auto cur = RandNodeIdWithDistance(mSelfId, i);
+    //     if (cur == id || cur == mSelfId) {
+    //         continue;
+    //     }
+    //     id = cur;
+    //     // Start worker the search
+    //     ilias_spawn [id, this]() -> Task<> {
+    //         co_await findNode(id);
+    //         DHT_LOG("Send search with id {}", id.toHex());
+    //         co_return {};
+    //     };
+    // }
     co_return {};
 }
 inline auto DhtSession::ping(const IPEndpoint &endpoint) -> Task<> {
@@ -382,5 +441,19 @@ inline auto DhtSession::_onFindNode(const IPEndpoint &ip, const BenObject &msg) 
     auto encoded = reply.toMessage().encode();
     auto n = co_await mClient4.sendto(encoded.data(), encoded.size(), ip);
     co_return {};
+}
+inline auto DhtSession::_onGetPeers(const IPEndpoint &ip, const BenObject &msg) -> Task<> {
+    auto query = GetPeersQuery::fromMessage(msg);
+    GetPeersReply reply {
+        .transId = query.transId,
+        .id = mSelfId,
+        .token = std::string(NodeId::rand().toStringView()),
+        .nodes = mRoutingTable.findClosestNodes(query.infoHash),
+    };
+    DHT_LOG("Send get peers reply to node: {}, endpoint: {}, infoHash: {}, num of node finded: {}", 
+        query.id.toHex(), ip.toString(), query.infoHash.toHex(), reply.nodes.size()
+    );
+    auto encoded = reply.toMessage().encode();
+    auto n = co_await mClient4.sendto(encoded.data(), encoded.size(), ip);
     co_return {};
 }

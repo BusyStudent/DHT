@@ -82,7 +82,7 @@ struct RoutingTable {
      */
     auto find(const NodeId &id) -> Node * {
         auto distance = self.distance(id);
-        auto &bucket = buckets[std::min(distance, buckets.size() - 1)];
+        auto &bucket = buckets[distance];
         return bucket.find(id);
     }
     /**
@@ -94,7 +94,7 @@ struct RoutingTable {
      */
     auto updateGoodNode(const NodeId &id, const IPEndpoint &endpoint) -> Node * {
         auto distance = self.distance(id);
-        auto &bucket = buckets[std::min(distance, buckets.size() - 1)];
+        auto &bucket = buckets[distance];
         auto node = bucket.find(id);
         if (!node) {
             // Insert
@@ -136,16 +136,51 @@ struct RoutingTable {
         }
     }
     auto findClosestNodes(const NodeId &id) -> std::vector<NodeInfo> {
-        auto distance = self.distance(id);
-        auto &bucket = buckets[std::min(distance, buckets.size() - 1)];
-
+        int distance = self.distance(id);
+        int offset = 0;
+        bool increase = false;
+        bool flip = false;
         std::vector<NodeInfo> nodes;
-        for (auto &node : bucket.nodes) {
-            nodes.emplace_back(*node);
+
+        while (nodes.size() < KBUCKET_SIZE) {
+            if (distance + offset >= 0 && distance + offset <= 160) {
+                auto &bucket = buckets[distance + offset];            
+                // DHT_LOG("Trying bucket[{}]: {} nodes, offset: {}", distance + offset, bucket.nodes.size(), offset);
+                for (auto &node : bucket.nodes) {
+                    nodes.emplace_back(*node);
+                }
+                if (nodes.size() >= KBUCKET_SIZE) {
+                    break;
+                }
+            }
+            if (distance + std::abs(offset) >= 320) {
+                DHT_LOG("Out of range, no more node");
+                break;
+            }
+            if (!increase) {
+                if (flip) {
+                    flip = false;
+                    offset = -offset;
+                }
+                increase = true;
+                offset++;
+            }
+            else {
+                increase = false;
+                offset = -offset;
+                flip = true;
+            }
+        }
+        if (nodes.empty()) {
+            DHT_LOG("No node found");
+            return {};
         }
         return nodes;
     }
+    auto operator [](size_t idx) -> Bucket & {
+        return buckets.at(idx);
+    }
 
     const NodeId       &self;
-    std::array<Bucket, 160> buckets;
+    std::array<Bucket, 161> buckets; // [0, 160]
 };

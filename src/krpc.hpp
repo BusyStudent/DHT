@@ -29,7 +29,27 @@ inline auto GetMessageType(const BenObject &msg) -> MessageType {
     }
     return MessageType::Unknown;
 }
-
+inline auto EncodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
+    std::string ret;
+    switch (endpoint.family()) {
+        case AF_INET: {
+            auto addr = endpoint.address4();
+            ret.append(reinterpret_cast<const char*>(&addr), sizeof(addr));
+            break;
+        }
+        case AF_INET6: {
+            auto addr = endpoint.address6();
+            ret.append(reinterpret_cast<const char*>(&addr), sizeof(addr));
+            break;
+        }
+        default: {
+            assert(false);
+        }
+    }
+    auto port = ::htons(endpoint.port());
+    ret.append(reinterpret_cast<const char*>(&port), sizeof(port));
+    return ret;
+}
 /**
  * @brief Check this message is query
  * 
@@ -190,20 +210,7 @@ struct FindNodeReply {
         std::string nodesStr;
         for (auto &node : nodes) {
             nodesStr += node.id.toStringView();
-            switch (node.endpoint.family()) {
-                case AF_INET: {
-                    auto addr4 = node.endpoint.address4();
-                    nodesStr += reinterpret_cast<const char*>(&addr4);
-                    break;
-                }
-                case AF_INET6: {
-                    auto addr6 = node.endpoint.address6();
-                    nodesStr += reinterpret_cast<const char*>(&addr6);
-                    break;
-                }
-            }
-            auto port = ::htons(node.endpoint.port());
-            nodesStr += reinterpret_cast<const char*>(&port);
+            nodesStr += EncodeIPEndpoint(node.endpoint);
         }
         if (!nodesStr.empty()) {
             msg["r"]["nodes"] = nodesStr;
@@ -235,6 +242,74 @@ struct FindNodeReply {
             }
         }
         return reply;
+    }
+};
+
+struct GetPeersQuery {
+    std::string transId;
+    NodeId   id; //< which node give this query
+    NodeId   infoHash; //< target hash
+
+    auto operator <=>(const GetPeersQuery &) const = default;
+
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenDict();
+        msg["t"] = transId;
+        msg["y"] = "q";
+        msg["q"] = "get_peers";
+
+        msg["a"] = BenDict();
+        msg["a"]["id"] = id.toStringView();
+        msg["a"]["info_hash"] = infoHash.toStringView();
+        return msg;
+    }
+    static auto fromMessage(const BenObject &msg) -> GetPeersQuery {
+        assert(IsQueryMessage(msg));
+
+        GetPeersQuery query;
+        query.transId = GetMessageTransactionId(msg);
+        auto id = msg["a"]["id"].toString();
+        assert(id.size() == 20);
+        auto infoHash = msg["a"]["info_hash"].toString();
+        assert(infoHash.size() == 20);
+        query.id = NodeId::from(id.data(), id.size());
+        query.infoHash = NodeId::from(infoHash.data(), 20);
+        return query;
+    }
+};
+
+struct GetPeersReply {
+    std::string transId;
+    NodeId   id; //< which node give this reply
+    std::string token;
+    std::vector<NodeInfo> nodes; //< Id: IP: Port
+    std::vector<IPEndpoint> values; //< Peers ip:port
+
+    auto operator <=>(const GetPeersReply &) const = default;
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenDict();
+        msg["t"] = transId;
+        msg["y"] = "r";
+        msg["r"] = BenDict();
+        msg["r"]["id"] = id.toStringView();
+        msg["r"]["token"] = token;
+
+        std::string nodesStr;
+        for (auto &node : nodes) {
+            nodesStr += node.id.toStringView();
+            nodesStr += EncodeIPEndpoint(node.endpoint);
+        }
+        if (!nodesStr.empty()) {
+            msg["r"]["nodes"] = nodesStr;
+        }
+        std::string valueStr;
+        for (auto &value : values) {
+            valueStr += EncodeIPEndpoint(value);
+        }
+        if (!valueStr.empty()) {
+            msg["r"]["values"] = valueStr;
+        }
+        return msg;
     }
 };
 

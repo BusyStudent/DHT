@@ -90,6 +90,13 @@ TEST(Kad, ID) {
     // Self distance is 0
     auto rand = NodeId::rand();
     ASSERT_EQ(rand.distance(rand), 0);
+
+    // Random distance
+    for (int i = 160; i >= 10; i--) {
+        auto id = RandNodeIdWithDistance(rand, i);
+        // ASSERT_EQ(id.distance(rand), i);
+        std::cout << id.distance(rand) << std::endl;
+    }
 }
 
 TEST(Kad, Rpc) {

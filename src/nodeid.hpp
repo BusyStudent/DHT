@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cassert>
 #include <random>
 #include <array>
 #include <span>
@@ -201,4 +202,33 @@ template <size_t N>
 inline auto NodeId::fromHex(const char (&hexString)[N]) -> NodeId {
     static_assert(N == 41, "Hex string must be 40 characters");
     return fromHex(std::string_view(hexString));
+}
+
+inline auto RandNodeIdWithDistance(const NodeId &id, size_t distance) {
+    assert(distance <= 160);
+    uint8_t buffer[20];
+    ::memcpy(buffer, &id, sizeof(id));
+
+    std::mt19937 gen;
+    std::uniform_int_distribution<uint32_t> dis(0, 255);
+    gen.seed(std::random_device()());
+
+    // Distance means numof bits keep different
+    for (int i = 20; i >= 0; i--) {
+        if (!distance) {
+            continue;
+        }
+        // Has difference
+        uint8_t now = dis(gen);
+        if (distance >= 8) {
+            distance -= 8;
+        }
+        else {
+            now >>= (8 - distance);
+            now &= buffer[i];
+            distance = 0;
+        }
+        buffer[i] = now;
+    }
+    return NodeId::from(buffer, sizeof(buffer));
 }
