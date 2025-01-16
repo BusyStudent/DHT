@@ -204,9 +204,9 @@ inline auto NodeId::fromHex(const char (&hexString)[N]) -> NodeId {
     return fromHex(std::string_view(hexString));
 }
 
-inline auto RandNodeIdWithDistance(const NodeId &id, size_t distance) {
+inline auto randNodeIdWithDistance(const NodeId &id, size_t distance) {
     assert(distance <= 160);
-    uint8_t buffer[20];
+    uint8_t buffer[20] {0};
     ::memcpy(buffer, &id, sizeof(id));
 
     std::mt19937 gen;
@@ -214,7 +214,7 @@ inline auto RandNodeIdWithDistance(const NodeId &id, size_t distance) {
     gen.seed(std::random_device()());
 
     // Distance means numof bits keep different
-    for (int i = 20; i >= 0; i--) {
+    for (int i = 19; i >= 0; i--) {
         if (!distance) {
             continue;
         }
@@ -225,7 +225,7 @@ inline auto RandNodeIdWithDistance(const NodeId &id, size_t distance) {
         }
         else {
             now >>= (8 - distance);
-            now &= buffer[i];
+            now ^= buffer[i];
             distance = 0;
         }
         buffer[i] = now;

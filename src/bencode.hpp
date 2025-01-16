@@ -1,10 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <charconv>
 #include <compare>
 #include <variant>
+#include <format>
 #include <string>
 #include <vector>
+#include <span>
 #include <map>
 
 /**
@@ -54,6 +57,15 @@ public:
      * @param str 
      */
     BenObject(const std::string &str) : mData(str) { }
+
+    /**
+     * @brief Construct a new string Ben Object object from binary data
+     * 
+     * @param buffer The binary 
+     */
+    BenObject(std::span<const std::byte> buffer) : mData(
+        std::string(reinterpret_cast<const char*>(buffer.data()), buffer.size_bytes())
+    ) { }
 
     /**
      * @brief Construct a new string Ben Object object
@@ -159,13 +171,6 @@ public:
     auto toDict() const -> const Dict & { return std::get<Dict>(mData); }
 
     /**
-     * @brief To human readable debug string
-     * 
-     * @return std::string 
-     */
-    auto toDebugString() const -> std::string;
-
-    /**
      * @brief Get the element size
      * 
      * @return size_t 
@@ -195,9 +200,9 @@ public:
     /**
      * @brief Assign the ben object
      * 
-     * @return BenObject& 
+     * @return BenObject & 
      */
-    auto operator =(const BenObject &) -> BenObject& = default;
+    auto operator =(const BenObject &other) -> BenObject & = default;
 
     auto operator =(BenObject &&) -> BenObject& = default;
 
@@ -435,3 +440,64 @@ inline auto BenObject::makeList() -> BenObject {
 inline auto BenObject::makeDict() -> BenObject {
     return Dict { };
 }
+
+template <>
+struct std::formatter<BenObject> {
+    auto parse(std::format_parse_context &ctxt) const {
+        return ctxt.begin();
+    }
+
+    auto format(const BenObject &object, std::format_context &ctxt) const {
+        std::string output;
+        formatTo(output, object, 0);
+        return std::format_to(ctxt.out(), "{}", output);
+    }
+
+    auto formatTo(std::string &output, const BenObject &cur, int indent) const -> void {
+        std::string indentation(indent, ' ');
+        if (cur.isInt()) {
+            output += indentation + std::to_string(cur.toInt());
+        } 
+        else if (cur.isString()) {
+            const auto &str = cur.toString();
+            if (std::all_of(str.begin(), str.end(), ::isascii)) {
+                output += indentation + "\"" + str + "\"";
+            }
+            else {
+                output += indentation + "\"";
+                for (unsigned char c : str) {
+                    output += std::format("\\x{:02x}", c);
+                }
+                output += "\"";
+            }
+        }
+        else if (cur.isList()) {
+            output += indentation + "[\n";
+            for (const auto &item : cur.toList()) {
+                formatTo(output, item, indent + 2);
+                output += ",\n";
+            }
+            if (!cur.toList().empty()) {
+                output.pop_back();
+                output.pop_back();
+            }
+            output += "\n" + indentation + "]";
+        }
+        else if (cur.isDict()) {
+            output += indentation + "{\n";
+            for (const auto &[key, value] : cur.toDict()) {
+                output += indentation + "  \"" + key + "\": ";
+                formatTo(output, value, indent + 2);
+                output += ",\n";
+            }
+            if (!cur.toDict().empty()) {
+                output.pop_back();
+                output.pop_back();
+            }
+            output += "\n" + indentation + "}";
+        }
+        else {
+            output += indentation + "null";
+        }
+    }
+};

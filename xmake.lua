@@ -7,7 +7,7 @@ set_languages("c++23")
 
 target("main")
     add_rules("qt.widgetapp")
-    -- add_files("src/*.cpp")
+    add_files("src/*.cpp")
     add_files("src/*.c")
     add_files("main.cpp")
     add_files("main.ui")

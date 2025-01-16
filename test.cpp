@@ -56,6 +56,9 @@ TEST(Bencode, encode) {
     // Assertion
     std::string expectedEncodedRequest = "d1:ad2:id20:mnopqrstuvwxyz123456e1:q4:ping1:t20:abcdefghij01234567891:y1:qe";
     ASSERT_EQ(encodedRequest, expectedEncodedRequest);
+
+    // Try show it
+    std::cout << std::format("{}", request) << std::endl;
 }
 TEST(Bencode, make) {
     BenObject list {
@@ -92,8 +95,8 @@ TEST(Kad, ID) {
     ASSERT_EQ(rand.distance(rand), 0);
 
     // Random distance
-    for (int i = 160; i >= 10; i--) {
-        auto id = RandNodeIdWithDistance(rand, i);
+    for (int i = 160; i >= 1; i--) {
+        auto id = randNodeIdWithDistance(rand, i);
         // ASSERT_EQ(id.distance(rand), i);
         std::cout << id.distance(rand) << std::endl;
     }
@@ -107,7 +110,7 @@ TEST(Kad, Rpc) {
     auto msg = query.toMessage();
     auto q = PingQuery::fromMessage(msg);
 
-    ASSERT_EQ(IsQueryMessage(msg), true);
+    ASSERT_EQ(isQueryMessage(msg), true);
     ASSERT_EQ(query, q);
     std::cout << msg.encode() << std::endl;
 

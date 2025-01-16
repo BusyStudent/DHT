@@ -16,8 +16,8 @@ struct NodeInfo {
     IPEndpoint endpoint;
 };
 
-inline auto GetMessageType(const BenObject &msg) -> MessageType {
-    auto y = msg["y"];
+inline auto getMessageType(const BenObject &msg) -> MessageType {
+    const auto &y = msg["y"];
     if (y == "q") {
         return MessageType::Query;
     } 
@@ -29,7 +29,8 @@ inline auto GetMessageType(const BenObject &msg) -> MessageType {
     }
     return MessageType::Unknown;
 }
-inline auto EncodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
+
+inline auto encodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
     std::string ret;
     switch (endpoint.family()) {
         case AF_INET: {
@@ -50,15 +51,17 @@ inline auto EncodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
     ret.append(reinterpret_cast<const char*>(&port), sizeof(port));
     return ret;
 }
+
 /**
  * @brief Check this message is query
  * 
  * @param msg 
  * @return BenObject 
  */
-inline auto IsQueryMessage(const BenObject &msg) -> bool {
-    return GetMessageType(msg) == MessageType::Query;
+inline auto isQueryMessage(const BenObject &msg) -> bool {
+    return getMessageType(msg) == MessageType::Query;
 }
+
 /**
  * @brief Check this message is reply
  * 
@@ -66,11 +69,11 @@ inline auto IsQueryMessage(const BenObject &msg) -> bool {
  * @return true 
  * @return false 
  */
-inline auto IsReplyMessage(const BenObject &msg) -> bool {
-    return GetMessageType(msg) == MessageType::Reply;
+inline auto isReplyMessage(const BenObject &msg) -> bool {
+    return getMessageType(msg) == MessageType::Reply;
 }
-inline auto IsErrorMessage(const BenObject &msg) -> bool {
-    return GetMessageType(msg) == MessageType::Error;
+inline auto isErrorMessage(const BenObject &msg) -> bool {
+    return getMessageType(msg) == MessageType::Error;
 }
 
 /**
@@ -79,17 +82,17 @@ inline auto IsErrorMessage(const BenObject &msg) -> bool {
  * @param msg 
  * @return std::string 
  */
-inline auto GetMessageTransactionId(const BenObject &msg) -> std::string {
+inline auto getMessageTransactionId(const BenObject &msg) -> std::string {
     return msg["t"].toString();
 }
 template <typename T>
-inline auto GetMessageTransactionId(const BenObject &msg) -> T {
+inline auto getMessageTransactionId(const BenObject &msg) -> T {
     auto str = msg["t"].toString();
     assert(str.size() == sizeof(T));
     return *reinterpret_cast<const T*>(str.c_str());
 }
 
-inline auto FillMessageTransactionId(BenObject &msg, std::string_view idStr) -> void {
+inline auto fillMessageTransactionId(BenObject &msg, std::string_view idStr) -> void {
     msg["t"] = idStr;
 }
 
@@ -118,13 +121,13 @@ struct PingQuery {
         return msg;
     }
     static auto fromMessage(const BenObject &msg) -> PingQuery {
-        assert(IsQueryMessage(msg));
+        assert(isQueryMessage(msg));
         auto id = msg["a"]["id"].toString();
         assert(id.size() == 20);
         auto nId = NodeId::from(id.data(), id.size());
 
         return {
-            .transId = GetMessageTransactionId(msg),
+            .transId = getMessageTransactionId(msg),
             .id = nId
         };
     }
@@ -147,13 +150,13 @@ struct PingReply {
         return msg;
     }
     static auto fromMessage(const BenObject &msg) -> PingReply {
-        assert(IsReplyMessage(msg));
+        assert(isReplyMessage(msg));
         auto id = msg["r"]["id"].toString();
         assert(id.size() == 20);
         auto nId = NodeId::from(id.data(), id.size());
 
         return {
-            .transId = GetMessageTransactionId(msg),
+            .transId = getMessageTransactionId(msg),
             .id = nId
         };
     }
@@ -177,7 +180,7 @@ struct FindNodeQuery {
         return msg;
     };
     static auto fromMessage(const BenObject &msg) -> FindNodeQuery {
-        assert(IsQueryMessage(msg));
+        assert(isQueryMessage(msg));
         auto id = msg["a"]["id"].toString();
         assert(id.size() == 20);
         auto nId = NodeId::from(id.data(), id.size());
@@ -186,7 +189,7 @@ struct FindNodeQuery {
         assert(targetId.size() == 20);
         auto nTargetId = NodeId::from(targetId.data(), targetId.size());
         return {
-            .transId = GetMessageTransactionId(msg),
+            .transId = getMessageTransactionId(msg),
             .id = nId,
             .targetId = nTargetId
         };
@@ -210,7 +213,7 @@ struct FindNodeReply {
         std::string nodesStr;
         for (auto &node : nodes) {
             nodesStr += node.id.toStringView();
-            nodesStr += EncodeIPEndpoint(node.endpoint);
+            nodesStr += encodeIPEndpoint(node.endpoint);
         }
         if (!nodesStr.empty()) {
             msg["r"]["nodes"] = nodesStr;
@@ -218,10 +221,10 @@ struct FindNodeReply {
         return msg;
     }
     static auto fromMessage(const BenObject &msg) -> FindNodeReply {
-        assert(IsReplyMessage(msg));
+        assert(isReplyMessage(msg));
 
         FindNodeReply reply;
-        reply.transId = GetMessageTransactionId(msg);
+        reply.transId = getMessageTransactionId(msg);
         auto id = msg["r"]["id"].toString();
         assert(id.size() == 20);
         reply.id = NodeId::from(id.data(), id.size());
@@ -264,10 +267,10 @@ struct GetPeersQuery {
         return msg;
     }
     static auto fromMessage(const BenObject &msg) -> GetPeersQuery {
-        assert(IsQueryMessage(msg));
+        assert(isQueryMessage(msg));
 
         GetPeersQuery query;
-        query.transId = GetMessageTransactionId(msg);
+        query.transId = getMessageTransactionId(msg);
         auto id = msg["a"]["id"].toString();
         assert(id.size() == 20);
         auto infoHash = msg["a"]["info_hash"].toString();
@@ -297,14 +300,14 @@ struct GetPeersReply {
         std::string nodesStr;
         for (auto &node : nodes) {
             nodesStr += node.id.toStringView();
-            nodesStr += EncodeIPEndpoint(node.endpoint);
+            nodesStr += encodeIPEndpoint(node.endpoint);
         }
         if (!nodesStr.empty()) {
             msg["r"]["nodes"] = nodesStr;
         }
         std::string valueStr;
         for (auto &value : values) {
-            valueStr += EncodeIPEndpoint(value);
+            valueStr += encodeIPEndpoint(value);
         }
         if (!valueStr.empty()) {
             msg["r"]["values"] = valueStr;
@@ -330,10 +333,10 @@ struct ErrorReply {
         return msg;
     };
     static auto fromMessage(const BenObject &msg) -> ErrorReply {
-        assert(IsErrorMessage(msg));
+        assert(isErrorMessage(msg));
 
         ErrorReply reply;
-        reply.transId = GetMessageTransactionId(msg);
+        reply.transId = getMessageTransactionId(msg);
         reply.errorCode = msg["e"][0].toInt();
         reply.error = msg["e"][1].toString();
         return reply;
