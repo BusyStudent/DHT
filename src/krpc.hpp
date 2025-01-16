@@ -108,12 +108,12 @@ struct PingQuery {
      * @return BenObject 
      */
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "q";
         msg["q"] = "ping";
 
-        msg["a"] = BenDict();
+        msg["a"] = BenObject::makeDict();
         msg["a"]["id"] = id.toStringView();
         return msg;
     }
@@ -139,10 +139,10 @@ struct PingReply {
 
     auto operator <=>(const PingReply &) const = default;
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "r";
-        msg["r"] = BenDict();
+        msg["r"] = BenObject::makeDict();
         msg["r"]["id"] = id.toStringView();
         return msg;
     }
@@ -166,12 +166,12 @@ struct FindNodeQuery {
 
     auto operator <=>(const FindNodeQuery &) const = default;
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "q";
         msg["q"] = "find_node";
 
-        msg["a"] = BenDict();
+        msg["a"] = BenObject::makeDict();
         msg["a"]["id"] = id.toStringView();
         msg["a"]["target"] = targetId.toStringView();
         return msg;
@@ -201,10 +201,10 @@ struct FindNodeReply {
     auto operator <=>(const FindNodeReply &) const = default;
 
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "r";
-        msg["r"] = BenDict();
+        msg["r"] = BenObject::makeDict();
         msg["r"]["id"] = id.toStringView();
 
         std::string nodesStr;
@@ -234,7 +234,7 @@ struct FindNodeReply {
                 auto data = nodes.substr(i, 26);
                 assert(data.size() == 26); //< NodeId + IP + Port
                 auto id = NodeId::from(data.data(), 20);
-                auto addr = IPAddress::fromRaw(data.data() + 20, 4);
+                auto addr = IPAddress::fromRaw(data.data() + 20, 4).value();
                 auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
                 // Convert port to host
                 port = ntohs(port);
@@ -253,12 +253,12 @@ struct GetPeersQuery {
     auto operator <=>(const GetPeersQuery &) const = default;
 
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "q";
         msg["q"] = "get_peers";
 
-        msg["a"] = BenDict();
+        msg["a"] = BenObject::makeDict();
         msg["a"]["id"] = id.toStringView();
         msg["a"]["info_hash"] = infoHash.toStringView();
         return msg;
@@ -287,10 +287,10 @@ struct GetPeersReply {
 
     auto operator <=>(const GetPeersReply &) const = default;
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "r";
-        msg["r"] = BenDict();
+        msg["r"] = BenObject::makeDict();
         msg["r"]["id"] = id.toStringView();
         msg["r"]["token"] = token;
 
@@ -320,7 +320,7 @@ struct ErrorReply {
 
     auto operator <=>(const ErrorReply &) const = default;
     auto toMessage() const -> BenObject {
-        BenObject msg = BenDict();
+        BenObject msg = BenObject::makeDict();
         msg["t"] = transId;
         msg["y"] = "e";
         msg["e"] = BenObject {

@@ -21,63 +21,75 @@ public:
      * 
      */
     BenObject() = default;
+
     /**
      * @brief Construct a new Ben Object object
      * 
      */
     BenObject(const BenObject &) = default;
+
     /**
      * @brief Construct a new Ben Object object
      * 
      */
     BenObject(BenObject &&) = default;
+
     /**
      * @brief Construct a new INT Ben Object object
      * 
      * @param num 
      */
     BenObject(int64_t num) : mData(num) { }
+
     /**
      * @brief Construct a new string Ben Object object
      * 
      * @param str 
      */
     BenObject(std::string_view str) : mData(std::string(str)) { }
+
     /**
      * @brief Construct a new string Ben Object object
      * 
      * @param str 
      */
     BenObject(const std::string &str) : mData(str) { }
+
     /**
      * @brief Construct a new string Ben Object object
      * 
      * @param str 
      */
     BenObject(const char *str) : mData(str) { }
+
     /**
      * @brief Construct a new List Ben Object object
      * 
      * @param list 
      */
     BenObject(List &&list) : mData(std::move(list)) { }
+
     /**
      * @brief Construct a new Dict Ben Object object
      * 
      * @param dict 
      */
     BenObject(Dict &&dict) : mData(std::move(dict)) { }
+
     /**
+     * 
      * @brief Construct a new List Ben Object object
      * 
      * @param list 
      */
     BenObject(std::initializer_list<BenObject> list) : mData(List(list)) { }
+
     /**
      * @brief Destroy the Ben Object object
      * 
      */
     ~BenObject() = default;
+
     /**
      * @brief Check is list
      * 
@@ -85,6 +97,7 @@ public:
      * @return false 
      */
     auto isList() const -> bool { return std::holds_alternative<List>(mData); }
+
     /**
      * @brief Check is dict
      * 
@@ -92,6 +105,7 @@ public:
      * @return false 
      */
     auto isDict() const -> bool { return std::holds_alternative<Dict>(mData); }
+
     /**
      * @brief Check is int
      * 
@@ -99,6 +113,7 @@ public:
      * @return false 
      */
     auto isInt() const -> bool { return std::holds_alternative<int64_t>(mData); }
+
     /**
      * @brief Check is string
      * 
@@ -106,6 +121,7 @@ public:
      * @return false 
      */
     auto isString() const -> bool { return std::holds_alternative<std::string>(mData); }
+
     /**
      * @brief Check is null
      * 
@@ -113,36 +129,42 @@ public:
      * @return false 
      */
     auto isNull() const -> bool { return std::holds_alternative<std::monostate>(mData); }
+
     /**
      * @brief Cast to string
      * 
      * @return std::string 
      */
     auto toString() const -> const std::string & { return std::get<std::string>(mData); }
+
     /**
      * @brief Cast to int
      * 
      * @return int64_t 
      */
     auto toInt() const -> int64_t { return std::get<int64_t>(mData); }
+
     /**
      * @brief Get the List from the BenObject
      * 
      * @return List& 
      */
     auto toList() const -> const List & { return std::get<List>(mData); }
+
     /**
      * @brief Get the Dict from the BenObject
      * 
      * @return Dict& 
      */
     auto toDict() const -> const Dict & { return std::get<Dict>(mData); }
+
     /**
      * @brief To human readable debug string
      * 
      * @return std::string 
      */
     auto toDebugString() const -> std::string;
+
     /**
      * @brief Get the element size
      * 
@@ -153,12 +175,14 @@ public:
         if (isDict()) return toDict().size();
         return 0;
     }
+
     /**
      * @brief Encode the object to string
      * 
      * @return std::string 
      */
     auto encode() const -> std::string;
+
     /**
      * @brief Encode current object's data to the target string's end
      * 
@@ -167,13 +191,16 @@ public:
      * @return false 
      */
     auto encodeTo(std::string &str) const -> bool;
+
     /**
      * @brief Assign the ben object
      * 
      * @return BenObject& 
      */
     auto operator =(const BenObject &) -> BenObject& = default;
+
     auto operator =(BenObject &&) -> BenObject& = default;
+
     /**
      * @brief Index or emplace the value if is a dict
      * 
@@ -183,6 +210,7 @@ public:
     auto operator [](const std::string &key) -> BenObject & {
         return std::get<Dict>(mData)[key];
     }
+
     /**
      * @brief Index the value if is a dict
      * 
@@ -196,23 +224,28 @@ public:
         if (iter == dict.end()) return null;
         return iter->second;
     }
+
     /**
      * @brief Indexing the element
      * 
      * @param idx 
      * @return BenObject& 
      */
+
     auto operator [](size_t idx) -> BenObject & {
         return std::get<List>(mData).at(idx);
     }
+
     auto operator [](size_t idx) const -> const BenObject & {
         return std::get<List>(mData).at(idx);
     }
+
     /**
      * @brief Compare the number
      * 
      */
     auto operator <=>(const BenObject &) const = default;
+
     /**
      * @brief Get the BenObject from the buffer
      * 
@@ -220,8 +253,11 @@ public:
      * @return BenObject 
      */
     static auto decode(std::string_view str) -> BenObject;
+
     static auto decode(const void *buffer, size_t n) -> BenObject;
+
     static auto decodeIn(std::string_view &current) -> BenObject;
+
     /**
      * @brief Create a string ben object from a raw memory
      * 
@@ -230,6 +266,20 @@ public:
      * @return BenObject 
      */
     static auto fromRawAsString(const void *buf, size_t n) -> BenObject;
+
+    /**
+     * @brief Create a list
+     * 
+     * @return BenObject 
+     */
+    static auto makeList() -> BenObject;
+
+    /**
+     * @brief Create a dict
+     * 
+     * @return BenObject 
+     */
+    static auto makeDict() -> BenObject;
 private:
     std::variant<
         std::monostate,
@@ -239,23 +289,6 @@ private:
         Dict
     > mData;
 };
-
-/**
- * @brief Create a Ben List
- * 
- * @return BenObject 
- */
-inline auto BenList() -> BenObject {
-    return BenObject(BenObject::List{});
-}
-/**
- * @brief Create a Ben Dict
- * 
- * @return BenObject 
- */
-inline auto BenDict() -> BenObject {
-    return BenObject(BenObject::Dict{});
-}
 
 // --- BenObject Impl
 inline auto BenObject::encodeTo(std::string &buffer) const -> bool {
@@ -300,6 +333,7 @@ inline auto BenObject::encodeTo(std::string &buffer) const -> bool {
     // Impossible
     return false;
 }
+
 inline auto BenObject::encode() const -> std::string {
     std::string str;
     if (!encodeTo(str)) {
@@ -378,15 +412,26 @@ inline auto BenObject::decodeIn(std::string_view &view) -> BenObject {
     }
     return BenObject();
 }
+
 inline auto BenObject::decode(std::string_view view) -> BenObject {
     return decodeIn(view);
 }
+
 inline auto BenObject::decode(const void *buffer, size_t n) -> BenObject {
     return decode(std::string_view(static_cast<const char *>(buffer), n));
 }
+
 inline auto BenObject::fromRawAsString(const void *mem, size_t n) -> BenObject {
     return std::string_view(
         static_cast<const char *>(mem),
         n
     );
+}
+
+inline auto BenObject::makeList() -> BenObject {
+    return List { };
+}
+
+inline auto BenObject::makeDict() -> BenObject {
+    return Dict { };
 }

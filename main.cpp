@@ -1,6 +1,6 @@
 #include <iostream>
 #include <format>
-#include <ilias_qt.hpp>
+#include <ilias/platform/qt.hpp>
 #include "src/session.hpp"
 #include <QApplication>
 #include "ui_main.h"
@@ -26,50 +26,50 @@ public:
             ui.nodeIdEdit->setText(QString::fromUtf8(text));
         });
         connect(ui.pingButton, &QPushButton::clicked, this, [this]() {
-            ilias_spawn [this]() -> Task<> {
-                co_await mSession.ping(IPEndpoint(ui.pingEdit->text().toStdString().c_str()));
-                co_return {};
-            }; 
+            // ilias_spawn [this]() -> Task<> {
+            //     co_await mSession.ping(IPEndpoint(ui.pingEdit->text().toStdString().c_str()));
+            //     co_return {};
+            // }; 
         });
         connect(ui.bootstrapButton, &QPushButton::clicked, this, [this]() {
-            ilias_spawn [this]() -> Task<> {
-                co_await mSession.bootstrap(IPEndpoint(ui.bootstrapEdit->text().toStdString().c_str()));
-                co_return {};
-            }; 
+            // ilias_spawn [this]() -> Task<> {
+            //     co_await mSession.bootstrap(IPEndpoint(ui.bootstrapEdit->text().toStdString().c_str()));
+            //     co_return {};
+            // }; 
         });
         connect(ui.showBucketsButton, &QPushButton::clicked, this, [this]() {
-            auto tree = ui.treeWidget;
-            tree->clear();
-            auto &table = mSession.routingTable();
-            for (size_t i = 0; i < table.buckets.size(); i++) {
-                auto &bucket = table.buckets[i];
-                auto item = new QTreeWidgetItem(tree);
-                item->setText(0, QString::number(i));
-                for (auto &node : bucket.nodes) {
-                    auto subItem = new QTreeWidgetItem(item);
-                    subItem->setText(0, QString::fromStdString(node->id.toHex()));
-                    subItem->setText(1, QString::fromStdString(node->endpoint.toString()));
-                }
-            }
+            // auto tree = ui.treeWidget;
+            // tree->clear();
+            // auto &table = mSession.routingTable();
+            // for (size_t i = 0; i < table.buckets.size(); i++) {
+            //     auto &bucket = table.buckets[i];
+            //     auto item = new QTreeWidgetItem(tree);
+            //     item->setText(0, QString::number(i));
+            //     for (auto &node : bucket.nodes) {
+            //         auto subItem = new QTreeWidgetItem(item);
+            //         subItem->setText(0, QString::fromStdString(node->id.toHex()));
+            //         subItem->setText(1, QString::fromStdString(node->endpoint.toString()));
+            //     }
+            // }
         });
         connect(ui.findNodeButton, &QPushButton::clicked, this, [this]() {
-            ilias_spawn [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
-                co_await mSession.findNode(id);
-                co_return {};
-            }; 
+            // ilias_spawn [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
+            //     co_await mSession.findNode(id);
+            //     co_return {};
+            // }; 
         });
     }
     auto start() -> void {
-        auto idText = ui.nodeIdEdit->text();
-        if (!idText.isEmpty()) {
-            mSession.setNodeId(NodeId::fromHex(idText.toStdString()));
-        }
-        mSession.setBindEndpoint(IPEndpoint(ui.bindEdit->text().toStdString().c_str()));
-        mSession.start();   
+        // auto idText = ui.nodeIdEdit->text();
+        // if (!idText.isEmpty()) {
+        //     mSession.setNodeId(NodeId::fromHex(idText.toStdString()));
+        // }
+        // mSession.setBindEndpoint(IPEndpoint(ui.bindEdit->text().toStdString().c_str()));
+        // mSession.start();   
     }
 private:
     QIoContext mIo;
-    DhtSession mSession {mIo};
+    // DhtSession mSession {mIo};
     Ui::MainWindow ui;
 };
 

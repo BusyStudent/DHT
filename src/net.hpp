@@ -1,4 +1,3 @@
-#define ILIAS_NO_SSL
-#include <ilias_networking.hpp>
+#include <ilias/net.hpp>
 
-using namespace Ilias;
+using namespace ilias;

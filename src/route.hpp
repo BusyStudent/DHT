@@ -6,7 +6,7 @@
 #include <format>
 
 #ifndef DHT_LOG
-#define DHT_LOG(fmt, ...) fprintf(stderr, "[DHT] %s\n" ,std::format(fmt, ##__VA_ARGS__).c_str())
+#define DHT_LOG(fmt, ...) fprintf(stderr, "[DHT] %s\n", std::format(fmt, ##__VA_ARGS__).c_str())
 #endif
 
 // https://www.bittorrent.org/beps/bep_0005.html

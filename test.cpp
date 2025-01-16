@@ -32,7 +32,7 @@ TEST(Bencode, decode) {
     ASSERT_EQ(BenObject::decode("d1:ai1e1:b1:b1:cli2ei3ee"), BenObject());
 }
 TEST(Bencode, encode) {
-    auto object = BenDict();
+    auto object = BenObject::makeDict();
     object["a"] = 1;
     object["b"] = "b";
     object["c"] = {
@@ -41,12 +41,12 @@ TEST(Bencode, encode) {
     ASSERT_EQ(object.encode(), "d1:ai1e1:b1:b1:cli2ei3eee");
 
     // KRPC Request
-    auto request = BenDict();
+    auto request = BenObject::makeDict();
     request["t"] = "abcdefghij0123456789";  // Transaction ID
     request["y"] = "q";                     // Query
     request["q"] = "ping";                  // Method
 
-    request["a"] = BenDict();
+    request["a"] = BenObject::makeDict();
     request["a"]["id"] = "mnopqrstuvwxyz123456";  // Node ID
 
 
