@@ -3,7 +3,16 @@
 #include <ilias/platform/qt.hpp>
 #include "src/session.hpp"
 #include <QApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
+#include <optional>
 #include "ui_main.h"
+
+#if __cpp_lib_stacktrace
+    #include <stacktrace>
+#endif
 
 #pragma comment(linker, "/SUBSYSTEM:console")
 
@@ -58,19 +67,37 @@ public:
             //     co_return {};
             // }; 
         });
+
+        // Try Load config
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            return;
+        }
+        auto json = QJsonDocument::fromJson(file.readAll()).object();
+        ui.bindEdit->setText(json["ip"].toString());
+        ui.nodeIdEdit->setText(json["id"].toString());
     }
+
     auto start() -> void {
-        // auto idText = ui.nodeIdEdit->text();
-        // if (!idText.isEmpty()) {
-        //     mSession.setNodeId(NodeId::fromHex(idText.toStdString()));
-        // }
-        // mSession.setBindEndpoint(IPEndpoint(ui.bindEdit->text().toStdString().c_str()));
-        // mSession.start();   
+        auto idText = ui.nodeIdEdit->text();
+        auto endpoint = IPEndpoint::fromString(ui.bindEdit->text().toStdString().c_str());
+        auto nodeId = idText.isEmpty() ? NodeId::rand() : NodeId::fromHex(idText.toStdString().c_str());
+        // Make session and start it
+        mSession.emplace(mIo, nodeId, endpoint.value());
+        mHandle = spawn(mIo, &DhtSession::run, &*mSession);
+    }
+
+    ~App() {
+        if (mHandle) {
+            mHandle.cancel();
+            mHandle.wait();
+        }
     }
 private:
     QIoContext mIo;
-    // DhtSession mSession {mIo};
     Ui::MainWindow ui;
+    std::optional<DhtSession> mSession;
+    WaitHandle<> mHandle;
 };
 
 int main(int argc, char **argv) {
@@ -78,6 +105,15 @@ int main(int argc, char **argv) {
     ::SetConsoleCP(65001);
     ::SetConsoleOutputCP(65001);
     std::setlocale(LC_ALL, ".utf-8");
+#endif
+
+#if __cpp_lib_stacktrace && _WIN32
+    ::SetUnhandledExceptionFilter([](PEXCEPTION_POINTERS) -> LONG {
+        std::cerr << "Unhandled exception\n" << std::endl;
+        std::cerr << std::stacktrace::current() << std::endl;
+        __debugbreak();
+        return EXCEPTION_EXECUTE_HANDLER;
+    });
 #endif
 
     QApplication a(argc, argv);

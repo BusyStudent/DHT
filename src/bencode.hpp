@@ -29,13 +29,13 @@ public:
      * @brief Construct a new Ben Object object
      * 
      */
-    BenObject(const BenObject &) = default;
+    BenObject(const BenObject &) noexcept = default;
 
     /**
      * @brief Construct a new Ben Object object
      * 
      */
-    BenObject(BenObject &&) = default;
+    BenObject(BenObject &&) noexcept = default;
 
     /**
      * @brief Construct a new INT Ben Object object

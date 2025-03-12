@@ -1,5 +1,6 @@
 #pragma once
 
+#include <format>
 #include <cstdint>
 #include <cassert>
 #include <random>
@@ -26,18 +27,21 @@ public:
      * @return size_t 
      */
     auto clz() const -> size_t;
+
     /**
      * @brief To human readable hex string
      * 
      * @return std::string 
      */
     auto toHex() const -> std::string;
+
     /**
      * @brief Cast to binary string view
      * 
      * @return std::string_view 
      */
     auto toStringView() const -> std::string_view;
+
     /**
      * @brief Calc the distance with the node
      * 
@@ -45,6 +49,15 @@ public:
      * @return size_t 0 on self, 160 on max, smaller is closer
      */
     auto distance(const NodeId &id) const -> size_t;
+
+    /**
+     * @brief Random a node id at distance
+     * 
+     * @param distance The distance of the generated nodeid to self
+     * @return NodeId 
+     */
+    auto randWithDistance(size_t distance) const -> NodeId;
+
     /**
      * @brief Assign the node id
      * 
@@ -52,29 +65,34 @@ public:
      */
     auto operator =(const NodeId &) -> NodeId & = default;
     auto operator =(NodeId &&) -> NodeId & = default;
+
     /**
      * @brief Xor the Node Id
      * 
      * @return NodeId 
      */
     auto operator ^(const NodeId &) const -> NodeId;
+
     /**
      * @brief Compare Node id
      * 
      */
     auto operator <=>(const NodeId &) const = default;
+
     /**
      * @brief Random a node id
      * 
      * @return NodeId 
      */
     static auto rand() -> NodeId;
+    
     /**
      * @brief Get zero node id
      * 
      * @return NodeId 
      */
     static auto zero() -> NodeId;
+
     /**
      * @brief Create node id from a memory buffer
      * 
@@ -83,14 +101,16 @@ public:
      * @return NodeId 
      */
     static auto from(const void *mem, size_t n) -> NodeId;
+
     /**
      * @brief Create node id from a memory buffer
      * 
-     * @tparam ize_t 
+     * @tparam size_t 
      * @return NodeId 
      */
     template <size_t N>
     static auto from(const char (&mem)[N]) -> NodeId;
+
     /**
      * @brief Create node id from hex string
      * 
@@ -98,6 +118,7 @@ public:
      * @return NodeId 
      */
     static auto fromHex(std::string_view hexString) -> NodeId;
+
     /**
      * @brief Create node id from hex string
      * 
@@ -121,9 +142,9 @@ inline auto NodeId::clz() const -> size_t {
     return 20 * 8;
 }
 inline auto NodeId::toHex() const -> std::string {
-    std::string buffer(40, 0);
+    std::string buffer(40, '\0');
     for (size_t i = 0; i < mId.size(); i++) {
-        ::sprintf(buffer.data() + i * 2, "%02x", mId[i]);
+        std::snprintf(buffer.data() + i * 2, 3, "%02x", mId[i]);
     }
     return buffer;
 }
@@ -131,9 +152,34 @@ inline auto NodeId::distance(const NodeId &id) const -> size_t {
     auto d = (*this) ^ id;
     return 160 - d.clz();
 }
+inline auto NodeId::randWithDistance(size_t distance) const -> NodeId {
+    assert(distance <= 160);
+    NodeId result = *this;
+    
+    std::mt19937 gen(std::random_device{}());
+    std::uniform_int_distribution<uint32_t> dis(0, 255);
+
+    // Make sure we have enough bits to change
+    size_t remainingBits = distance;
+    for (int i = 19; remainingBits > 0 && i >= 0; i--) {
+        uint8_t mask = 0;
+        uint8_t bits = std::min(size_t(8), remainingBits);
+        
+        // Get the mask
+        for (size_t j = 0; j < bits; j++) {
+            mask |= (1 << j);
+        }
+        
+        // Randomly flip the bits
+        result.mId[i] ^= (dis(gen) & mask);
+        remainingBits -= bits;
+    }
+    
+    return result;
+}
 inline auto NodeId::toStringView() const -> std::string_view {
     return std::string_view(
-        reinterpret_cast<const char*>(mId.data()),
+        reinterpret_cast<const char *>(mId.data()), 
         mId.size()
     );
 }
@@ -146,9 +192,8 @@ inline auto NodeId::operator ^(const NodeId &other) const -> NodeId {
 }
 
 inline auto NodeId::rand() -> NodeId {
-    std::mt19937 gen;
+    static thread_local std::mt19937 gen(std::random_device{}());
     std::uniform_int_distribution<uint32_t> dis(0, 255);
-    gen.seed(std::random_device()());
     
     uint8_t buffer[20];
     for (auto& i : buffer) {
@@ -170,7 +215,7 @@ inline auto NodeId::zero() -> NodeId {
     return id;
 }
 inline auto NodeId::from(const void *mem, size_t n) -> NodeId {
-    if (n != 20) {
+    if (mem == nullptr || n != 20) {
         return zero();
     }
     NodeId id;
@@ -192,7 +237,7 @@ inline auto NodeId::fromHex(std::string_view hexString) -> NodeId {
     for (auto i = 0; i < 20; i++) {
         auto sub = hexString.substr(i * 2, 2);
         auto [ptr, ec] = std::from_chars(sub.data(), sub.data() + sub.size(), id.mId[i], 16);
-        if (ec != std::errc()) {
+        if (ec != std::errc{}) {
             return zero();
         }
     }
@@ -204,31 +249,13 @@ inline auto NodeId::fromHex(const char (&hexString)[N]) -> NodeId {
     return fromHex(std::string_view(hexString));
 }
 
-inline auto randNodeIdWithDistance(const NodeId &id, size_t distance) {
-    assert(distance <= 160);
-    uint8_t buffer[20] {0};
-    ::memcpy(buffer, &id, sizeof(id));
 
-    std::mt19937 gen;
-    std::uniform_int_distribution<uint32_t> dis(0, 255);
-    gen.seed(std::random_device()());
-
-    // Distance means numof bits keep different
-    for (int i = 19; i >= 0; i--) {
-        if (!distance) {
-            continue;
-        }
-        // Has difference
-        uint8_t now = dis(gen);
-        if (distance >= 8) {
-            distance -= 8;
-        }
-        else {
-            now >>= (8 - distance);
-            now ^= buffer[i];
-            distance = 0;
-        }
-        buffer[i] = now;
+template <>
+struct std::formatter<NodeId> {
+    auto parse(std::format_parse_context& ctx) const {
+        return ctx.begin();
     }
-    return NodeId::from(buffer, sizeof(buffer));
-}
+    auto format(const NodeId& id, std::format_context &ctx) const {
+        return std::format_to(ctx.out(), "{}", id.toHex());
+    }
+};

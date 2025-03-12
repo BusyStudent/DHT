@@ -1,7 +1,7 @@
 add_rules("mode.debug", "mode.release")
 add_rules("plugin.compile_commands.autoupdate", {lsp = "cpptools", outputdir = ".vscode"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
-add_requires("gtest", "ilias")
+add_requires("gtest", "ilias dev")
 
 set_languages("c++23")
 
@@ -16,7 +16,7 @@ target("test")
     set_default(false)
     add_packages("gtest", "ilias")
     set_kind("binary")
-    -- add_files("src/*.cpp")
+    add_files("src/*.cpp")
     add_files("src/*.c")
     add_files("test.cpp")
 --

@@ -1,5 +1,6 @@
 #include "src/bencode.hpp"
 #include "src/nodeid.hpp"
+#include "src/route.hpp"
 #include "src/krpc.hpp"
 #include <gtest/gtest.h>
 
@@ -31,6 +32,7 @@ TEST(Bencode, decode) {
     ASSERT_EQ(BenObject::decode("l1:a1:b"), BenObject());
     ASSERT_EQ(BenObject::decode("d1:ai1e1:b1:b1:cli2ei3ee"), BenObject());
 }
+
 TEST(Bencode, encode) {
     auto object = BenObject::makeDict();
     object["a"] = 1;
@@ -60,6 +62,7 @@ TEST(Bencode, encode) {
     // Try show it
     std::cout << std::format("{}", request) << std::endl;
 }
+
 TEST(Bencode, make) {
     BenObject list {
         1, "Hello", {
@@ -73,6 +76,7 @@ TEST(Bencode, make) {
     ASSERT_EQ(list[2][0], "A");
     ASSERT_EQ(list[2][1], 2);
 }
+
 TEST(Kad, ID) {
     ASSERT_EQ(NodeId::zero(), NodeId::zero());
 
@@ -96,10 +100,15 @@ TEST(Kad, ID) {
 
     // Random distance
     for (int i = 160; i >= 1; i--) {
-        auto id = randNodeIdWithDistance(rand, i);
+        auto id = rand.randWithDistance(i);
         // ASSERT_EQ(id.distance(rand), i);
         std::cout << id.distance(rand) << std::endl;
     }
+
+    // Check a distance b eq b distance a
+    auto a1 = NodeId::rand();
+    auto b1 = NodeId::rand();
+    ASSERT_EQ(a1.distance(b1), b1.distance(a1));
 }
 
 TEST(Kad, Rpc) {
@@ -133,6 +142,29 @@ TEST(Kad, Rpc) {
     ASSERT_EQ(errorReply.errorCode, 201);
 
     ASSERT_EQ(errorReply.toMessage().encode(), errorEncoded);
+}
+
+TEST(Kad, Route) {
+    auto id = NodeId::rand();
+    RoutingTable table(id);
+    for (size_t i = 0; i < 160; i++) {
+        for (size_t n = 0; n < 10; n++) {
+            table.updateNode({id.randWithDistance(i), "127.0.0.1:10"});
+        }
+    }
+    auto targetId = id.randWithDistance(100);
+    auto nodes = table.findClosestNodes(targetId, 20);
+    std::cout << "Search result" << std::endl;
+    for (auto &node : nodes) {
+        std::cout << node.id.toHex() << std::endl;
+        std::cout << node.id.distance(targetId) << std::endl;
+    }
+    auto nodes2 = table.findClosestNodes(id, 20);
+    std::cout << "Search result" << std::endl;
+    for (auto &node : nodes2) {
+        std::cout << node.id.toHex() << std::endl;
+        std::cout << node.id.distance(id) << std::endl;
+    }
 }
 
 int main(int argc, char **argv) {

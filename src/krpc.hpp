@@ -11,9 +11,21 @@ enum class MessageType {
     Error,
     Unknown,
 };
-struct NodeInfo {
+struct NodeEndpoint {
     NodeId id;
-    IPEndpoint endpoint;
+    IPEndpoint ip;
+
+    auto operator ==(const NodeEndpoint &other) const {
+        return id == other.id && ip == other.ip;
+    }
+
+    auto operator !=(const NodeEndpoint &other) const {
+        return !(*this == other);
+    }
+
+    auto operator <(const NodeEndpoint &other) const {
+        return id < other.id;
+    }
 };
 
 inline auto getMessageType(const BenObject &msg) -> MessageType {
@@ -52,6 +64,70 @@ inline auto encodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
     return ret;
 }
 
+inline auto decodeIPEndpoint(std::string_view endpoint) -> IPEndpoint {
+    // Adress : Port
+    IPAddress address;
+    if (endpoint.size() == sizeof(::in_addr)) {
+        address = IPAddress::fromRaw(endpoint.data(), sizeof(::in_addr)).value();
+    }
+    else if (endpoint.size() == sizeof(::in6_addr)) {
+        address = IPAddress::fromRaw(endpoint.data(), sizeof(::in6_addr)).value();
+    }
+    else {
+        assert(false);
+    }
+    auto port = *reinterpret_cast<const uint16_t*>(endpoint.data() + address.length());
+    return IPEndpoint(address, ::ntohs(port));
+}
+
+inline auto decodeIPEndpoints(std::string_view endpoints) -> std::vector<IPEndpoint> {
+    std::vector<IPEndpoint> ret;
+    // Check is V6 or v4
+    size_t stride = 0;
+    if (endpoints.size() % 6 == 0) {
+        stride = 6; // IPv4
+    }
+    else if (endpoints.size() % 18 == 0) {
+        stride = 18; // IPv6
+    }
+    else {
+        assert(false);
+    }
+    for (size_t i = 0; i < endpoints.size(); i += stride) {
+        ret.emplace_back(decodeIPEndpoint(endpoints.substr(i, stride)));
+    }
+    return ret;
+}
+
+inline auto decodeNodes(std::string_view nodes) -> std::vector<NodeEndpoint> {
+    // Check is V6 or v4
+    if (nodes.size() % 26 == 0) {
+        // IPv4
+        std::vector<NodeEndpoint> ret;
+        for (size_t i = 0; i < nodes.size(); i += 26) {
+            auto str = nodes.substr(i, 20);
+            auto id = NodeId::from(str.data(), str.size());
+            auto ip = decodeIPEndpoint(nodes.substr(i + 20, 6));
+            ret.emplace_back(id, ip);
+        }
+        return ret;
+    }
+    else if (nodes.size() % 38 == 0) {
+        // IPv6
+        std::vector<NodeEndpoint> ret;
+        for (size_t i = 0; i < nodes.size(); i += 38) {
+            auto str = nodes.substr(i, 32);
+            auto id = NodeId::from(str.data(), str.size());
+            auto ip = decodeIPEndpoint(nodes.substr(i + 32, 6));
+            ret.emplace_back(id, ip);
+        }
+        return ret;
+    }
+    else {
+        assert(false);
+    }
+}
+
 /**
  * @brief Check this message is query
  * 
@@ -72,6 +148,7 @@ inline auto isQueryMessage(const BenObject &msg) -> bool {
 inline auto isReplyMessage(const BenObject &msg) -> bool {
     return getMessageType(msg) == MessageType::Reply;
 }
+
 inline auto isErrorMessage(const BenObject &msg) -> bool {
     return getMessageType(msg) == MessageType::Error;
 }
@@ -85,6 +162,7 @@ inline auto isErrorMessage(const BenObject &msg) -> bool {
 inline auto getMessageTransactionId(const BenObject &msg) -> std::string {
     return msg["t"].toString();
 }
+
 template <typename T>
 inline auto getMessageTransactionId(const BenObject &msg) -> T {
     auto str = msg["t"].toString();
@@ -199,7 +277,7 @@ struct FindNodeQuery {
 struct FindNodeReply {
     std::string transId;
     NodeId   id; //< witch node give this reply
-    std::vector<NodeInfo> nodes; //< Id: IP: Port
+    std::vector<NodeEndpoint> nodes; //< Id: IP: Port
 
     auto operator <=>(const FindNodeReply &) const = default;
 
@@ -211,12 +289,19 @@ struct FindNodeReply {
         msg["r"]["id"] = id.toStringView();
 
         std::string nodesStr;
+        bool v6 = false;
         for (auto &node : nodes) {
             nodesStr += node.id.toStringView();
-            nodesStr += encodeIPEndpoint(node.endpoint);
+            nodesStr += encodeIPEndpoint(node.ip);
+            v6 = v6 || node.ip.family() == AF_INET6;
         }
         if (!nodesStr.empty()) {
-            msg["r"]["nodes"] = nodesStr;
+            if (v6) {
+                msg["r"]["nodes6"] = nodesStr;
+            }
+            else {
+                msg["r"]["nodes"] = nodesStr;
+            }
         }
         return msg;
     }
@@ -230,8 +315,7 @@ struct FindNodeReply {
         reply.id = NodeId::from(id.data(), id.size());
 
         // Parse response nodes
-        auto &nodesObject = msg["r"]["nodes"];
-        if (nodesObject.isString()) {
+        if (auto &nodesObject = msg["r"]["nodes"]; nodesObject.isString()) {
             auto &nodes = nodesObject.toString();
             for (size_t i = 0; i < nodes.size(); i += 26) {
                 auto data = nodes.substr(i, 26);
@@ -243,6 +327,23 @@ struct FindNodeReply {
                 port = ntohs(port);
                 reply.nodes.emplace_back(id, IPEndpoint(addr, port));
             }
+        }
+        else if (auto &nodesObject = msg["r"]["nodes6"]; nodesObject.isString()) {
+            auto &nodes = nodesObject.toString();
+            for (size_t i = 0; i < nodes.size(); i += 38) {
+                auto data = nodes.substr(i, 38);
+                assert(data.size() == 38); //< NodeId + IP + Port
+                auto id = NodeId::from(data.data(), 20);
+                auto addr = IPAddress::fromRaw(data.data() + 20, 16).value();
+                auto port = *reinterpret_cast<const uint16_t*>(data.data() + 36);
+                // Convert port to host
+                port = ntohs(port);
+                reply.nodes.emplace_back(id, IPEndpoint(addr, port));
+            }
+        }
+        else {
+            // WTF?
+            assert(false);
         }
         return reply;
     }
@@ -285,7 +386,7 @@ struct GetPeersReply {
     std::string transId;
     NodeId   id; //< which node give this reply
     std::string token;
-    std::vector<NodeInfo> nodes; //< Id: IP: Port
+    std::vector<NodeEndpoint> nodes; //< Id: IP: Port
     std::vector<IPEndpoint> values; //< Peers ip:port
 
     auto operator <=>(const GetPeersReply &) const = default;
@@ -298,12 +399,19 @@ struct GetPeersReply {
         msg["r"]["token"] = token;
 
         std::string nodesStr;
+        bool v6 = false;
         for (auto &node : nodes) {
             nodesStr += node.id.toStringView();
-            nodesStr += encodeIPEndpoint(node.endpoint);
+            nodesStr += encodeIPEndpoint(node.ip);
+            v6 = v6 || node.ip.family() == AF_INET6;
         }
         if (!nodesStr.empty()) {
-            msg["r"]["nodes"] = nodesStr;
+            if (v6) {
+                msg["r"]["nodes6"] = nodesStr;
+            }
+            else {
+                msg["r"]["nodes"] = nodesStr;                
+            }
         }
         std::string valueStr;
         for (auto &value : values) {
@@ -313,6 +421,25 @@ struct GetPeersReply {
             msg["r"]["values"] = valueStr;
         }
         return msg;
+    }
+    static auto fromMessage(const BenObject &msg) -> GetPeersReply {
+        assert(isReplyMessage(msg));
+
+        GetPeersReply reply;
+        reply.transId = getMessageTransactionId(msg);
+        auto id = msg["r"]["id"].toString();
+        assert(id.size() == 20);
+        reply.id = NodeId::from(id.data(), id.size());
+        reply.token = msg["r"]["token"].toString();
+        auto nodesStr = msg["r"]["nodes"].toString();
+        auto valuesStr = msg["r"]["values"].toString();
+        if (!nodesStr.empty()) {
+            reply.nodes = decodeNodes(nodesStr);
+        }
+        if (!valuesStr.empty()) {
+            reply.values = decodeIPEndpoints(valuesStr);
+        }
+        return reply;
     }
 };
 
@@ -340,5 +467,16 @@ struct ErrorReply {
         reply.errorCode = msg["e"][0].toInt();
         reply.error = msg["e"][1].toString();
         return reply;
+    }
+};
+
+template <>
+struct std::formatter<NodeEndpoint> {
+    auto parse(std::format_parse_context &ctxt) const {
+        return ctxt.begin();
+    }
+
+    auto format(const NodeEndpoint &endpoint, std::format_context &ctxt) const {
+        return std::format_to(ctxt.out(), "{}:{}", endpoint.id, endpoint.ip);
     }
 };
