@@ -62,10 +62,14 @@ public:
             // }
         });
         connect(ui.findNodeButton, &QPushButton::clicked, this, [this]() {
-            // ilias_spawn [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
-            //     co_await mSession.findNode(id);
-            //     co_return {};
-            // }; 
+            ilias_go [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
+                auto res = co_await mSession->findNode(id);
+                if (res) {
+                    for (auto &node : *res) {
+                        std::cout << "Found node: " << node.id.toHex() << std::endl;                        
+                    }
+                }
+            }; 
         });
 
         // Try Load config

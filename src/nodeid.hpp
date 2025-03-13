@@ -252,7 +252,7 @@ inline auto NodeId::fromHex(const char (&hexString)[N]) -> NodeId {
 
 template <>
 struct std::formatter<NodeId> {
-    auto parse(std::format_parse_context& ctx) const {
+    constexpr auto parse(std::format_parse_context& ctx) const {
         return ctx.begin();
     }
     auto format(const NodeId& id, std::format_context &ctx) const {

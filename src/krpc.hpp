@@ -4,6 +4,13 @@
 #include "nodeid.hpp"
 #include "net.hpp"
 #include <cassert>
+#include <optional>
+#include <format>
+
+#ifndef DHT_LOG
+#define DHT_LOG(fmt, ...) fprintf(stderr, "[DHT] %s\n", std::format(fmt, ##__VA_ARGS__).c_str())
+#endif
+
 
 enum class MessageType {
     Query,
@@ -39,6 +46,7 @@ inline auto getMessageType(const BenObject &msg) -> MessageType {
     else if (y == "e") {
         return MessageType::Error;
     }
+    DHT_LOG("Unknown message type: {}, from msg {}", y, msg);
     return MessageType::Unknown;
 }
 
@@ -160,14 +168,12 @@ inline auto isErrorMessage(const BenObject &msg) -> bool {
  * @return std::string 
  */
 inline auto getMessageTransactionId(const BenObject &msg) -> std::string {
-    return msg["t"].toString();
-}
-
-template <typename T>
-inline auto getMessageTransactionId(const BenObject &msg) -> T {
-    auto str = msg["t"].toString();
-    assert(str.size() == sizeof(T));
-    return *reinterpret_cast<const T*>(str.c_str());
+    auto &t = msg["t"];
+    if (!t.isString()) {
+        DHT_LOG("Failed to get transaction id from message: {}", msg);
+        return "";
+    }
+    return t.toString();
 }
 
 inline auto fillMessageTransactionId(BenObject &msg, std::string_view idStr) -> void {
@@ -343,7 +349,8 @@ struct FindNodeReply {
         }
         else {
             // WTF?
-            assert(false);
+            DHT_LOG("Invalid msg: {}", msg);
+            // assert(false);
         }
         return reply;
     }
@@ -470,13 +477,83 @@ struct ErrorReply {
     }
 };
 
+struct AnnouncePeerQuery {
+    std::string transId;
+    NodeId id;
+    std::string infoHash;
+    std::string token;
+    uint16_t port = 0;
+    bool impliedPort = true;
+
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenObject::makeDict();
+        msg["t"] = transId;
+        msg["y"] = "q";
+        msg["q"] = "announce_peer";
+        msg["a"] = BenObject::makeDict();
+        msg["a"]["id"] = id.toStringView();
+        msg["a"]["info_hash"] = infoHash;
+        msg["a"]["token"] = token;
+        msg["a"]["port"] = port;
+        msg["a"]["implied_port"] = int(impliedPort);
+        return msg;
+    }
+
+    static auto fromMessage(const BenObject &msg) -> AnnouncePeerQuery {
+        assert(isQueryMessage(msg));
+
+        AnnouncePeerQuery query;
+        query.transId = getMessageTransactionId(msg);
+        auto id = msg["a"]["id"].toString();
+        assert(id.size() == 20);
+        query.id = NodeId::from(id.data(), id.size());
+        query.infoHash = msg["a"]["info_hash"].toString();
+        query.token = msg["a"]["token"].toString();
+        query.port = msg["a"]["port"].toInt();
+        if (auto &impliedPort = msg["a"]["implied_port"]; impliedPort.isInt()) {
+            query.impliedPort = (impliedPort.toInt() != 0);
+        }
+        return query;
+    }
+};
+
+struct AnnouncePeerReply {
+    std::string transId;
+    NodeId id;
+
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenObject::makeDict();
+        msg["t"] = transId;
+        msg["y"] = "r";
+        msg["r"] = BenObject::makeDict();
+        msg["r"]["id"] = id.toStringView();
+        return msg;
+    }
+    static auto fromMessage(const BenObject &msg) -> AnnouncePeerReply {
+        assert(isReplyMessage(msg));
+
+        AnnouncePeerReply reply;
+        reply.transId = getMessageTransactionId(msg);
+        auto id = msg["r"]["id"].toString();
+        assert(id.size() == 20);
+        reply.id = NodeId::from(id.data(), id.size());
+        return reply;
+    }
+};
+
 template <>
 struct std::formatter<NodeEndpoint> {
-    auto parse(std::format_parse_context &ctxt) const {
+    constexpr auto parse(std::format_parse_context &ctxt) const {
         return ctxt.begin();
     }
 
     auto format(const NodeEndpoint &endpoint, std::format_context &ctxt) const {
-        return std::format_to(ctxt.out(), "{}:{}", endpoint.id, endpoint.ip);
+        return std::format_to(ctxt.out(), "{} :{}", endpoint.id, endpoint.ip);
     }
 };
+
+inline auto sortNodeEndpointList(std::vector<NodeEndpoint> &vec, const NodeId &target) -> void {
+    std::sort(vec.begin(), vec.end(), [&](const auto &a, const auto &b) {
+        return a.id.distance(target) < b.id.distance(target);
+    });
+}

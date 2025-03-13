@@ -443,7 +443,7 @@ inline auto BenObject::makeDict() -> BenObject {
 
 template <>
 struct std::formatter<BenObject> {
-    auto parse(std::format_parse_context &ctxt) const {
+    constexpr auto parse(std::format_parse_context &ctxt) const {
         return ctxt.begin();
     }
 

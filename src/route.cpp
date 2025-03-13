@@ -92,9 +92,10 @@ auto RoutingTable::dumpInfo() -> void {
     std::string text;
 
     std::format_to(std::back_inserter(text), "Routing Table Info:\n");
-    for (auto &bucket : mBuckets) {
+    for (size_t i = 0; i < mBuckets.size(); ++i) {
+        auto &bucket = mBuckets[i];
         if (!bucket.nodes.empty()) {
-            std::format_to(std::back_inserter(text), "Bucket: {}\n", bucket.nodes.size());
+            std::format_to(std::back_inserter(text), "Bucket: idx {}, nodes: {}\n", i, bucket.nodes.size());
         }
         for (auto &node : bucket.nodes) {
             std::format_to(std::back_inserter(text), "  Node: {}\n", node.endpoint);

@@ -4,6 +4,9 @@
 
 using namespace std::literals;
 
+constexpr auto MAX_DEPTH = 8;
+constexpr auto BFS_UNTIL = 2;
+
 DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, const IPEndpoint &addr) : 
     mCtxt(ctxt), mScope(ctxt), mClient(ctxt, addr.family()), 
     mEndpoint(addr), mId(id), mRoutingTable(id)
@@ -62,7 +65,7 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
             .id = mId
         };
         auto encoded = reply.toMessage().encode();
-        if (auto res = co_await mClient.sendto(makeBuffer(encoded), from); !res) {
+        if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
         }
         co_return {};
@@ -81,7 +84,7 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
             .nodes = nodes
         };
         auto encoded = reply.toMessage().encode();
-        if (auto res = co_await mClient.sendto(makeBuffer(encoded), from); !res) {
+        if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
         }
         co_return {};
@@ -97,10 +100,25 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
         auto reply = GetPeersReply {
             .transId = getPeers.transId,
             .id = mId,
+            .token = "token", // TODO: Generate a token
             .nodes = nodes
         };
         auto encoded = reply.toMessage().encode();
-        if (auto res = co_await mClient.sendto(makeBuffer(encoded), from); !res) {
+        if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
+            co_return unexpected(res.error());
+        }
+        co_return {};
+    }
+    else if (query == "announce_peer") {
+        // TODO: Record it
+        auto announce = AnnouncePeerQuery::fromMessage(message);
+        mRoutingTable.updateNode({announce.id, from});
+        auto reply = AnnouncePeerReply {
+            .transId = announce.transId,
+            .id = mId
+        };
+        auto encoded = reply.toMessage().encode();
+        if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
         }
         co_return {};
@@ -139,7 +157,7 @@ auto DhtSession::sendKrpc(const BenObject &message, const IPEndpoint &endpoint)
     if (auto res = co_await mClient.sendto(makeBuffer(content), endpoint); !res) {
         co_return unexpected(res.error());
     }
-    auto res = co_await (receiver.recv() | setTimeout(10s));
+    auto res = co_await (receiver.recv() | setTimeout(mTimeout));
     if (!res) { // Timeout or another error, remove it in map
         mPendingQueries.erase(it);
     }
@@ -183,10 +201,11 @@ auto DhtSession::findNode(const NodeId &target)
 auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env)
     -> IoTask<std::vector<NodeEndpoint> > 
 {
-    if (depth > 8) { // MAX_DEPTH ?
+    if (depth > MAX_DEPTH) { // MAX_DEPTH ?
         DHT_LOG("Max depth reached, target {}, endpoint {}, depth {}", target, endpoint, depth);
         co_return unexpected(Error::Unknown);
     }
+    DHT_LOG("Find node {}, endpoint {}, depth {}", target, endpoint, depth);
     FindNodeQuery query {
         .transId = allocateTransactionId(),
         .id = mId,
@@ -224,11 +243,11 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
         assert(env.closest); // Must have a closest node
         auto nodeDis = id.distance(target); // The node distance to target
         auto curDis = env.closest->distance(target); // The closest node distance to target
-        if (nodeDis < curDis) {
+        if (nodeDis < curDis || depth <= BFS_UNTIL) { // Until reach BFS_UNTIL depth we do BFS
             vec.emplace_back(id, ip);
         }
         else {
-            DHT_LOG("Node {} is far than current closest node {}, distance: {} < {}", id, reply.id, nodeDis, curDis);
+            DHT_LOG("Node {} is far than current closest node {}, distance: {} < {}, depth: {}", id, reply.id, nodeDis, curDis, depth);
         }
     }
     if (vec.empty()) {
@@ -242,7 +261,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
     for (auto &[id, ip] : vec) {
         auto [it, emplace] = env.visited.emplace(id, ip);
         if (!emplace) { // Already visited
-            DHT_LOG("Node {} is already visited", id);
+            // DHT_LOG("Node {} is already visited", id);
             continue; // Skip it
         }
         scope.spawn([&, this]() -> Task<void> {
@@ -270,7 +289,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
 
             // Check the first node is the target
             if (!result.empty() && result.front().id == target) {
-                DHT_LOG("Found target node {}", target);
+                DHT_LOG("Found target node {}, in depth", target, depth + 1);
                 scope.cancel();
             }
         });
@@ -293,15 +312,21 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
 
 auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
     DHT_LOG("Bootstrap to {}", nodeIp);
-    // std::mt19937_64 gen(std::random_device{}());
-    // std::uniform_int_distribution<uint64_t> dis(1, 20);
+    std::mt19937_64 gen(std::random_device{}());
+    std::uniform_int_distribution<uint64_t> dis(1, 20);
+    auto res = co_await findNode(NodeId::rand(), nodeIp);
+    if (!res) {
+        DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
+        co_return unexpected(res.error());
+    }
     for (size_t i = 1; i < 20; i++) {
-        auto res = co_await findNode(mId.randWithDistance(i), nodeIp);
+        auto res = co_await findNode(mId.randWithDistance(i));
         if (!res) {
             DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
             co_return unexpected(res.error());
         }
     }
+    mRoutingTable.dumpInfo();
     DHT_LOG("Bootstrap to {} success", nodeIp);
     co_return {};
 }
@@ -321,6 +346,7 @@ auto DhtSession::processInput() -> Task<void> {
         auto data = std::string_view(buffer, *res);
         auto message = BenObject::decode(data);
         if (message.isNull()) {
+            DHT_LOG("DhtSession::processInput parse message failed: from endpoint {}", endpoint);
             continue;
         }
         auto type = getMessageType(message);

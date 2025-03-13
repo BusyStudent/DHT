@@ -22,6 +22,16 @@ public:
      * @return Task<void> 
      */
     auto run() -> Task<void>;
+
+
+    /**
+     * @brief Try to find the node by target
+     * 
+     * @param target 
+     * @return IoTask<std::vector<NodeEndpoint> > (The nodes found, max is KBUCKET_SIZE, sorted by distance) 
+     */
+    auto findNode(const NodeId &target) -> 
+        IoTask<std::vector<NodeEndpoint> >;
 private:
     struct FindNodeEnv {
         std::set<NodeEndpoint> visited;
@@ -55,15 +65,6 @@ private:
      * @return IoTask<std::vector<NodeEndpoint> > 
      */
     auto findNode(const NodeId &target, const IPEndpoint &endpoint) -> 
-        IoTask<std::vector<NodeEndpoint> >;
-
-    /**
-     * @brief Try to find the node by target
-     * 
-     * @param target 
-     * @return IoTask<std::vector<NodeEndpoint> > (The nodes found, max is KBUCKET_SIZE, sorted by distance) 
-     */
-    auto findNode(const NodeId &target) -> 
         IoTask<std::vector<NodeEndpoint> >;
 
     /**
@@ -114,6 +115,7 @@ private:
     IPEndpoint mEndpoint;
     NodeId     mId;
     RoutingTable mRoutingTable;
+    std::chrono::milliseconds mTimeout = std::chrono::seconds(2);
 
     std::map<
         std::string, 
