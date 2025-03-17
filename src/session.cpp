@@ -51,6 +51,9 @@ auto DhtSession::run() -> Task<void> {
         co_return;
     }
     // Do normal DHT management
+    mScope.spawn(cleanupPeersTask());
+    // Join the scope
+    co_await mScope;
     co_return;
 }
 
@@ -59,9 +62,13 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
     auto query = message["q"].toString();
     if (query == "ping") { // Give the pong back
         auto ping = PingQuery::fromMessage(message);
-        mRoutingTable.updateNode({ping.id, from});
+        if (!ping) {
+            DHT_LOG("Invalid ping query");
+            co_return {};
+        }
+        mRoutingTable.updateNode({ping->id, from});
         auto reply = PingReply {
-            .transId = ping.transId,
+            .transId = ping->transId,
             .id = mId
         };
         auto encoded = reply.toMessage().encode();
@@ -72,14 +79,18 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
     }
     else if (query == "find_node") {
         auto find = FindNodeQuery::fromMessage(message);
-        auto nodes = mRoutingTable.findClosestNodes(find.targetId, 8);
-        mRoutingTable.updateNode({find.id, from});
+        if (!find) {
+            DHT_LOG("Invalid find node query");
+            co_return {};
+        }
+        auto nodes = mRoutingTable.findClosestNodes(find->targetId, 8);
+        mRoutingTable.updateNode({find->id, from});
         if (nodes.empty()) {
-            DHT_LOG("No nodes found for {}", find.targetId);
+            DHT_LOG("No nodes found for {}", find->targetId);
             co_return {}; // TODO: Maybe send a failure
         }
         auto reply = FindNodeReply {
-            .transId = find.transId,
+            .transId = find->transId,
             .id = mId,
             .nodes = nodes
         };
@@ -91,18 +102,33 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
     }
     else if (query == "get_peers") {
         auto getPeers = GetPeersQuery::fromMessage(message);
-        mRoutingTable.updateNode({getPeers.id, from});
-        auto nodes = mRoutingTable.findClosestNodes(getPeers.infoHash, 8);
+        if (!getPeers) {
+            DHT_LOG("Invalid get peers query");
+            co_return {};
+        }
+        mRoutingTable.updateNode({getPeers->id, from});
+        auto nodes = mRoutingTable.findClosestNodes(getPeers->infoHash, 8);
         if (nodes.empty()) {
-            DHT_LOG("No nodes found for {}", getPeers.infoHash);
+            DHT_LOG("No nodes found for {}", getPeers->infoHash);
             co_return {}; // TODO: Maybe send a failure
         }
         auto reply = GetPeersReply {
-            .transId = getPeers.transId,
+            .transId = getPeers->transId,
             .id = mId,
             .token = "token", // TODO: Generate a token
             .nodes = nodes
         };
+        // Find the peers and push them to the reply
+        auto it = mPeers.find(getPeers->infoHash);
+        if (it != mPeers.end()) {
+            auto &[_, set] = *it;
+            for (auto &peer : set) {
+                reply.values.push_back(peer);
+                if (reply.values.size() >= KBUCKET_SIZE) {
+                    break;
+                }
+            }
+        }
         auto encoded = reply.toMessage().encode();
         if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
@@ -112,9 +138,19 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
     else if (query == "announce_peer") {
         // TODO: Record it
         auto announce = AnnouncePeerQuery::fromMessage(message);
-        mRoutingTable.updateNode({announce.id, from});
+        if (!announce) {
+            DHT_LOG("Invalid announce peer query");
+            co_return {};
+        }
+        auto infoHash = InfoHash::from(announce->infoHash.data(), announce->infoHash.size());
+        DHT_LOG("Announce peer infoHash {} from {}", infoHash, from);
+        if (mOnAnnouncePeer) {
+            mOnAnnouncePeer(infoHash, from);
+        }
+        mPeers[infoHash].insert(from);
+        mRoutingTable.updateNode({announce->id, from});
         auto reply = AnnouncePeerReply {
-            .transId = announce.transId,
+            .transId = announce->transId,
             .id = mId
         };
         auto encoded = reply.toMessage().encode();
@@ -159,7 +195,8 @@ auto DhtSession::sendKrpc(const BenObject &message, const IPEndpoint &endpoint)
     }
     auto res = co_await (receiver.recv() | setTimeout(mTimeout));
     if (!res) { // Timeout or another error, remove it in map
-        mPendingQueries.erase(it);
+        // mPendingQueries.erase(it);
+        mPendingQueries.erase(id); // More safe ?
     }
     co_return res;
 }
@@ -168,7 +205,7 @@ auto DhtSession::findNode(const NodeId &target, const IPEndpoint &endpoint)
     -> IoTask<std::vector<NodeEndpoint>> 
 {
     FindNodeEnv env;
-    co_return co_await findNodeImpl(target, endpoint, 0, env);
+    co_return co_await findNodeImpl(target, std::nullopt, endpoint, 0, env);
 }
 
 auto DhtSession::findNode(const NodeId &target)
@@ -178,7 +215,7 @@ auto DhtSession::findNode(const NodeId &target)
     std::vector<NodeEndpoint> nodes = mRoutingTable.findClosestNodes(target, 8);
     std::vector<IoTask<std::vector<NodeEndpoint>> > tasks;
     for (const auto &node : nodes) {
-        tasks.push_back(findNodeImpl(target, node.ip, 0, env));
+        tasks.push_back(findNodeImpl(target, node.id, node.ip, 0, env));
     }
     auto vec = co_await whenAll(std::move(tasks));
     std::vector<NodeEndpoint> res;
@@ -198,7 +235,17 @@ auto DhtSession::findNode(const NodeId &target)
     co_return res;
 }
 
-auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env)
+auto DhtSession::routingTable() const -> const RoutingTable & {
+    return mRoutingTable;
+}
+
+auto DhtSession::setOnAnouncePeer(
+    std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback)
+    -> void {
+  mOnAnnouncePeer = std::move(callback);
+}
+
+auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env)
     -> IoTask<std::vector<NodeEndpoint> > 
 {
     if (depth > MAX_DEPTH) { // MAX_DEPTH ?
@@ -213,6 +260,10 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
     };
     auto res = co_await sendKrpc(query.toMessage(), endpoint);
     if (!res) {
+        if (id) { // If the id is known, try to mark it as bad node in routing table
+            mRoutingTable.markBadNode({*id, endpoint});
+        }
+        // TODO: If the error is timeout and id is known, try to mark it as bad node in routing table
         co_return unexpected(res.error());
     }
     auto &[message, from] = *res;
@@ -220,7 +271,11 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
         co_return unexpected(Error::Unknown); // TODO: Return by this error message
     }
 
-    auto reply = FindNodeReply::fromMessage(message);
+    auto replyParsed = FindNodeReply::fromMessage(message);
+    if (!replyParsed) { // Failed to parse
+        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+    }
+    auto reply = std::move(*replyParsed);
     mRoutingTable.updateNode({reply.id, from}); // This node give us reply, add it to routing table
     env.visited.insert({reply.id, from}); // Mark as visited
     std::sort(reply.nodes.begin(), reply.nodes.end(), [&](const auto &a, const auto &b) {
@@ -265,7 +320,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, 
             continue; // Skip it
         }
         scope.spawn([&, this]() -> Task<void> {
-            auto res = co_await findNodeImpl(target, ip, depth + 1, env);
+            auto res = co_await findNodeImpl(target, id, ip, depth + 1, env);
             if (!res) {
                 if (res.error() == Error::Canceled) {
                     scope.cancel();
@@ -338,7 +393,9 @@ auto DhtSession::processInput() -> Task<void> {
     while (true) {
         auto res = co_await mClient.recvfrom(makeBuffer(buffer), endpoint);
         if (!res) {
-            DHT_LOG("DhtSession::processInput recvfrom failed: {}", res.error());
+            if (res.error() != Error::Canceled) {
+                DHT_LOG("DhtSession::processInput recvfrom failed: {}", res.error());
+            }
             break;
         }
 
@@ -378,4 +435,15 @@ auto DhtSession::allocateTransactionId() -> std::string {
     }
     mTransactionId += 1;
     return std::string(reinterpret_cast<const char*>(&mTransactionId), sizeof(mTransactionId));
+}
+
+auto DhtSession::cleanupPeersTask() -> Task<void> { 
+    while (true) {
+        auto res = co_await sleep(15min);
+        if (!res) {
+            DHT_LOG("DhtSession::cleanupPeersTask request quit");
+            break;
+        }
+        mPeers.clear();
+    }
 }

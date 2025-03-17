@@ -46,6 +46,30 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
     return Status::Added;
 }
 
+auto RoutingTable::markBadNode(const NodeEndpoint &node) -> void {
+    size_t idx = findBucketIndex(node.id);
+    auto &bucket = mBuckets[idx];
+    auto &nodes = bucket.nodes;
+    auto it = std::find_if(nodes.begin(), nodes.end(), [&](const Node &n) {
+        return n.endpoint == node;
+    });
+    if (it == nodes.end()) { // The node not exists
+        return;
+    }
+    if (it->state == Node::Good) {
+        it->state = Node::Questionable; // Mark the node as questionable, if it's already questionable, drop it
+        DHT_LOG("Marking node {} as Questionable", node.id);
+        return;
+    }
+    DHT_LOG("Marking node {} as bad", node.id);
+    nodes.erase(it);
+    if (!bucket.pending.empty()) {
+        nodes.push_back(bucket.pending.front());
+        bucket.pending.pop_front();
+        DHT_LOG("Replaced node {} with pending node {}", node.id, nodes.back().endpoint.id);
+    }
+}
+
 auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::vector<NodeEndpoint> {
     std::vector<NodeEndpoint> vec;
 
@@ -86,7 +110,7 @@ auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::
     return vec;
 }
 
-auto RoutingTable::dumpInfo() -> void {
+auto RoutingTable::dumpInfo() const -> void {
 
 #if defined(__cpp_lib_format)
     std::string text;

@@ -32,6 +32,23 @@ public:
      */
     auto findNode(const NodeId &target) -> 
         IoTask<std::vector<NodeEndpoint> >;
+
+    /**
+     * @brief Try to ping a node by ip
+     * 
+     * @param nodeIp 
+     * @return IoTask<void> 
+     */
+    auto ping(const IPEndpoint &nodeIp) -> IoTask<void>;
+
+    /**
+     * @brief Get the routing table
+     * 
+     * @return const RoutingTable& 
+     */
+    auto routingTable() const -> const RoutingTable &;
+
+    auto setOnAnouncePeer(std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback) -> void;
 private:
     struct FindNodeEnv {
         std::set<NodeEndpoint> visited;
@@ -70,13 +87,14 @@ private:
     /**
      * @brief Try to find the node by target, using the endpoint
      * 
-     * @param target 
-     * @param endpoint 
+     * @param target The target node id we are looking for
+     * @param id The id of the node we query for
+     * @param endpoint The endpoint of the node we query for
      * @param depth The current search depth
      * @param visited The visited nodes
      * @return IoTask<std::vector<NodeEndpoint> > 
      */
-    auto findNodeImpl(const NodeId &target, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env) -> 
+    auto findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env) -> 
         IoTask<std::vector<NodeEndpoint> >;
 
     /**
@@ -86,14 +104,6 @@ private:
      * @return IoTask<void> 
      */
     auto bootstrap(const IPEndpoint &nodeIp) -> IoTask<void>;
-
-    /**
-     * @brief Try to ping a node by ip
-     * 
-     * @param nodeIp 
-     * @return IoTask<void> 
-     */
-    auto ping(const IPEndpoint &nodeIp) -> IoTask<void>;
 
     /**
      * @brief Process the input from the socket
@@ -109,6 +119,13 @@ private:
      */
     auto allocateTransactionId() -> std::string;
 
+    /**
+     * @brief A user task, to cleanup the peers
+     * 
+     * @return Task<void> 
+     */
+    auto cleanupPeersTask() -> Task<void>;
+
     IoContext &mCtxt;
     TaskScope  mScope;
     UdpClient  mClient;
@@ -122,4 +139,10 @@ private:
         oneshot::Sender<std::pair<BenObject, IPEndpoint> > 
     > mPendingQueries; //< The pending queries, we sent, waiting for reply
     uint16_t mTransactionId = 0; //< The transaction id
+
+    std::map<
+        InfoHash,
+        std::set<IPEndpoint> //< Use set to avoid duplicate
+    > mPeers; //< The peers they announced
+    std::function<void(const InfoHash &hash, const IPEndpoint &peer)> mOnAnnouncePeer; //< The callback when we got a announce peer
 };

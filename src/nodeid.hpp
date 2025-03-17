@@ -131,6 +131,8 @@ private:
     std::array<uint8_t, 20> mId;
 };
 
+using InfoHash = NodeId; // In Bittorrent
+
 inline auto NodeId::clz() const -> size_t {
     for (size_t i = 0; i < mId.size(); i++) {
         auto num = mId[i];

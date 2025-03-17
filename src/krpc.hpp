@@ -204,16 +204,26 @@ struct PingQuery {
         msg["a"]["id"] = id.toStringView();
         return msg;
     }
-    static auto fromMessage(const BenObject &msg) -> PingQuery {
-        assert(isQueryMessage(msg));
-        auto id = msg["a"]["id"].toString();
-        assert(id.size() == 20);
-        auto nId = NodeId::from(id.data(), id.size());
-
-        return {
-            .transId = getMessageTransactionId(msg),
-            .id = nId
-        };
+    static auto fromMessage(const BenObject &msg) -> std::optional<PingQuery> {
+        try {
+            if (!isQueryMessage(msg)) {
+                return std::nullopt;
+            }    
+            auto id = msg["a"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            auto nId = NodeId::from(id.data(), id.size());
+    
+            return PingQuery {
+                .transId = getMessageTransactionId(msg),
+                .id = nId
+            };    
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse ping query: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 /**
@@ -233,16 +243,26 @@ struct PingReply {
         msg["r"]["id"] = id.toStringView();
         return msg;
     }
-    static auto fromMessage(const BenObject &msg) -> PingReply {
-        assert(isReplyMessage(msg));
-        auto id = msg["r"]["id"].toString();
-        assert(id.size() == 20);
-        auto nId = NodeId::from(id.data(), id.size());
-
-        return {
-            .transId = getMessageTransactionId(msg),
-            .id = nId
-        };
+    static auto fromMessage(const BenObject &msg) -> std::optional<PingReply> {
+        try {
+            if (!isReplyMessage(msg)) {
+                return std::nullopt;
+            }
+            auto id = msg["r"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            auto nId = NodeId::from(id.data(), id.size());
+    
+            return PingReply {
+                .transId = getMessageTransactionId(msg),
+                .id = nId
+            };    
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse ping query: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 
@@ -263,20 +283,31 @@ struct FindNodeQuery {
         msg["a"]["target"] = targetId.toStringView();
         return msg;
     };
-    static auto fromMessage(const BenObject &msg) -> FindNodeQuery {
-        assert(isQueryMessage(msg));
-        auto id = msg["a"]["id"].toString();
-        assert(id.size() == 20);
-        auto nId = NodeId::from(id.data(), id.size());
-
-        auto targetId = msg["a"]["target"].toString();
-        assert(targetId.size() == 20);
-        auto nTargetId = NodeId::from(targetId.data(), targetId.size());
-        return {
-            .transId = getMessageTransactionId(msg),
-            .id = nId,
-            .targetId = nTargetId
-        };
+    static auto fromMessage(const BenObject &msg) -> std::optional<FindNodeQuery> {
+        try {
+            if (!isQueryMessage(msg)) {
+                return std::nullopt;
+            }
+            auto id = msg["a"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            auto targetId = msg["a"]["target"].toString();
+            if (targetId.size() != 20) {
+                return std::nullopt;
+            }
+            auto nId = NodeId::from(id.data(), id.size());
+            auto nTargetId = NodeId::from(targetId.data(), targetId.size());
+            return FindNodeQuery {
+                .transId = getMessageTransactionId(msg),
+                .id = nId,
+                .targetId = nTargetId
+            };
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse find_node query: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 
@@ -311,48 +342,55 @@ struct FindNodeReply {
         }
         return msg;
     }
-    static auto fromMessage(const BenObject &msg) -> FindNodeReply {
-        assert(isReplyMessage(msg));
-
-        FindNodeReply reply;
-        reply.transId = getMessageTransactionId(msg);
-        auto id = msg["r"]["id"].toString();
-        assert(id.size() == 20);
-        reply.id = NodeId::from(id.data(), id.size());
-
-        // Parse response nodes
-        if (auto &nodesObject = msg["r"]["nodes"]; nodesObject.isString()) {
-            auto &nodes = nodesObject.toString();
-            for (size_t i = 0; i < nodes.size(); i += 26) {
-                auto data = nodes.substr(i, 26);
-                assert(data.size() == 26); //< NodeId + IP + Port
-                auto id = NodeId::from(data.data(), 20);
-                auto addr = IPAddress::fromRaw(data.data() + 20, 4).value();
-                auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
-                // Convert port to host
-                port = ntohs(port);
-                reply.nodes.emplace_back(id, IPEndpoint(addr, port));
+    static auto fromMessage(const BenObject &msg) -> std::optional<FindNodeReply> {
+        try {
+            if (!isReplyMessage(msg)) {
+                return std::nullopt;
             }
-        }
-        else if (auto &nodesObject = msg["r"]["nodes6"]; nodesObject.isString()) {
-            auto &nodes = nodesObject.toString();
-            for (size_t i = 0; i < nodes.size(); i += 38) {
-                auto data = nodes.substr(i, 38);
-                assert(data.size() == 38); //< NodeId + IP + Port
-                auto id = NodeId::from(data.data(), 20);
-                auto addr = IPAddress::fromRaw(data.data() + 20, 16).value();
-                auto port = *reinterpret_cast<const uint16_t*>(data.data() + 36);
-                // Convert port to host
-                port = ntohs(port);
-                reply.nodes.emplace_back(id, IPEndpoint(addr, port));
+            FindNodeReply reply;
+            reply.transId = getMessageTransactionId(msg);
+            auto id = msg["r"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
             }
+            reply.id = NodeId::from(id.data(), id.size());
+
+            if (auto &nodesObject = msg["r"]["nodes"]; nodesObject.isString()) {
+                auto &nodes = nodesObject.toString();
+                for (size_t i = 0; i < nodes.size(); i += 26) {
+                    auto data = nodes.substr(i, 26);
+                    if (data.size() != 26) {
+                        return std::nullopt;
+                    }
+                    auto id = NodeId::from(data.data(), 20);
+                    auto addr = IPAddress::fromRaw(data.data() + 20, 4);
+                    if (!addr) return std::nullopt;
+                    auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
+                    port = ::ntohs(port);
+                    reply.nodes.emplace_back(id, IPEndpoint(addr.value(), port));
+                }
+            }
+            else if (auto &nodesObject = msg["r"]["nodes6"]; nodesObject.isString()) {
+                auto &nodes = nodesObject.toString();
+                for (size_t i = 0; i < nodes.size(); i += 38) {
+                    auto data = nodes.substr(i, 38);
+                    if (data.size() != 38) {
+                        return std::nullopt;
+                    }
+                    auto id = NodeId::from(data.data(), 20);
+                    auto addr = IPAddress::fromRaw(data.data() + 20, 16);
+                    if (!addr) return std::nullopt;
+                    auto port = *reinterpret_cast<const uint16_t*>(data.data() + 36);
+                    port = ::ntohs(port);
+                    reply.nodes.emplace_back(id, IPEndpoint(addr.value(), port));
+                }
+            }
+            return reply;
         }
-        else {
-            // WTF?
-            DHT_LOG("Invalid msg: {}", msg);
-            // assert(false);
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse find_node reply: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
         }
-        return reply;
     }
 };
 
@@ -374,18 +412,26 @@ struct GetPeersQuery {
         msg["a"]["info_hash"] = infoHash.toStringView();
         return msg;
     }
-    static auto fromMessage(const BenObject &msg) -> GetPeersQuery {
-        assert(isQueryMessage(msg));
-
-        GetPeersQuery query;
-        query.transId = getMessageTransactionId(msg);
-        auto id = msg["a"]["id"].toString();
-        assert(id.size() == 20);
-        auto infoHash = msg["a"]["info_hash"].toString();
-        assert(infoHash.size() == 20);
-        query.id = NodeId::from(id.data(), id.size());
-        query.infoHash = NodeId::from(infoHash.data(), 20);
-        return query;
+    static auto fromMessage(const BenObject &msg) -> std::optional<GetPeersQuery> {
+        try {
+            if (!isQueryMessage(msg)) {
+                return std::nullopt;
+            }
+            GetPeersQuery query;
+            query.transId = getMessageTransactionId(msg);
+            auto id = msg["a"]["id"].toString();
+            auto infoHash = msg["a"]["info_hash"].toString();
+            if (id.size() != 20 || infoHash.size() != 20) {
+                return std::nullopt;
+            }
+            query.id = NodeId::from(id.data(), id.size());
+            query.infoHash = NodeId::from(infoHash.data(), 20);
+            return query;
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse get_peers query: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 
@@ -420,33 +466,48 @@ struct GetPeersReply {
                 msg["r"]["nodes"] = nodesStr;                
             }
         }
-        std::string valueStr;
-        for (auto &value : values) {
-            valueStr += encodeIPEndpoint(value);
-        }
-        if (!valueStr.empty()) {
-            msg["r"]["values"] = valueStr;
+        if (!values.empty()) {
+            auto list = BenObject::makeList();
+            for (auto &value : values) {
+                list.append(encodeIPEndpoint(value));
+            }
+            msg["r"]["values"] = list;
         }
         return msg;
     }
-    static auto fromMessage(const BenObject &msg) -> GetPeersReply {
-        assert(isReplyMessage(msg));
-
-        GetPeersReply reply;
-        reply.transId = getMessageTransactionId(msg);
-        auto id = msg["r"]["id"].toString();
-        assert(id.size() == 20);
-        reply.id = NodeId::from(id.data(), id.size());
-        reply.token = msg["r"]["token"].toString();
-        auto nodesStr = msg["r"]["nodes"].toString();
-        auto valuesStr = msg["r"]["values"].toString();
-        if (!nodesStr.empty()) {
-            reply.nodes = decodeNodes(nodesStr);
+    static auto fromMessage(const BenObject &msg) -> std::optional<GetPeersReply> {
+        try {
+            if (!isReplyMessage(msg)) {
+                return std::nullopt;
+            }
+            GetPeersReply reply;
+            reply.transId = getMessageTransactionId(msg);
+            auto id = msg["r"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            reply.id = NodeId::from(id.data(), id.size());
+            reply.token = msg["r"]["token"].toString();
+            if (auto &nodes = msg["r"]["nodes"]; nodes.isString()) {
+                reply.nodes = decodeNodes(nodes.toString());
+            }
+            else if (auto &nodes = msg["r"]["nodes6"]; nodes.isString()) {
+                reply.nodes = decodeNodes(nodes.toString());
+            }
+            else {
+                // WTF?
+            }
+            if (auto &values = msg["r"]["values"]; values.isList()) {
+                for (auto &value : values.toList()) {
+                    reply.values.push_back(decodeIPEndpoint(value.toString()));
+                }
+            }
+            return reply;
         }
-        if (!valuesStr.empty()) {
-            reply.values = decodeIPEndpoints(valuesStr);
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse get_peers reply: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
         }
-        return reply;
     }
 };
 
@@ -466,14 +527,21 @@ struct ErrorReply {
         };
         return msg;
     };
-    static auto fromMessage(const BenObject &msg) -> ErrorReply {
-        assert(isErrorMessage(msg));
-
-        ErrorReply reply;
-        reply.transId = getMessageTransactionId(msg);
-        reply.errorCode = msg["e"][0].toInt();
-        reply.error = msg["e"][1].toString();
-        return reply;
+    static auto fromMessage(const BenObject &msg) -> std::optional<ErrorReply> {
+        try {
+            if (!isErrorMessage(msg)) {
+                return std::nullopt;
+            }
+            ErrorReply reply;
+            reply.transId = getMessageTransactionId(msg);
+            reply.errorCode = msg["e"][0].toInt();
+            reply.error = msg["e"][1].toString();
+            return reply;
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse error reply: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 
@@ -499,21 +567,33 @@ struct AnnouncePeerQuery {
         return msg;
     }
 
-    static auto fromMessage(const BenObject &msg) -> AnnouncePeerQuery {
-        assert(isQueryMessage(msg));
-
-        AnnouncePeerQuery query;
-        query.transId = getMessageTransactionId(msg);
-        auto id = msg["a"]["id"].toString();
-        assert(id.size() == 20);
-        query.id = NodeId::from(id.data(), id.size());
-        query.infoHash = msg["a"]["info_hash"].toString();
-        query.token = msg["a"]["token"].toString();
-        query.port = msg["a"]["port"].toInt();
-        if (auto &impliedPort = msg["a"]["implied_port"]; impliedPort.isInt()) {
-            query.impliedPort = (impliedPort.toInt() != 0);
+    static auto fromMessage(const BenObject &msg) -> std::optional<AnnouncePeerQuery> {
+        try {
+            if (!isQueryMessage(msg)) {
+                return std::nullopt;
+            }
+            AnnouncePeerQuery query;
+            query.transId = getMessageTransactionId(msg);
+            auto id = msg["a"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            query.id = NodeId::from(id.data(), id.size());
+            query.infoHash = msg["a"]["info_hash"].toString();
+            query.token = msg["a"]["token"].toString();
+            query.port = msg["a"]["port"].toInt();
+            if (query.infoHash.size() != 20) {
+                return std::nullopt;
+            }
+            if (auto &impliedPort = msg["a"]["implied_port"]; impliedPort.isInt()) {
+                query.impliedPort = (impliedPort.toInt() != 0);
+            }
+            return query;
         }
-        return query;
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse announce_peer query: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 
@@ -529,15 +609,24 @@ struct AnnouncePeerReply {
         msg["r"]["id"] = id.toStringView();
         return msg;
     }
-    static auto fromMessage(const BenObject &msg) -> AnnouncePeerReply {
-        assert(isReplyMessage(msg));
-
-        AnnouncePeerReply reply;
-        reply.transId = getMessageTransactionId(msg);
-        auto id = msg["r"]["id"].toString();
-        assert(id.size() == 20);
-        reply.id = NodeId::from(id.data(), id.size());
-        return reply;
+    static auto fromMessage(const BenObject &msg) -> std::optional<AnnouncePeerReply> {
+        try {
+            if (!isReplyMessage(msg)) {
+                return std::nullopt;
+            }
+            AnnouncePeerReply reply;
+            reply.transId = getMessageTransactionId(msg);
+            auto id = msg["r"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            reply.id = NodeId::from(id.data(), id.size());
+            return reply;
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse announce_peer reply: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
     }
 };
 

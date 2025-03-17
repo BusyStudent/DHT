@@ -182,6 +182,16 @@ public:
     }
 
     /**
+     * @brief Push back the object to the list
+     * 
+     * @param obj 
+     */
+    auto append(const BenObject &obj) -> void {
+        auto &list = std::get<List>(mData);
+        list.push_back(obj);
+    }
+
+    /**
      * @brief Encode the object to string
      * 
      * @return std::string 

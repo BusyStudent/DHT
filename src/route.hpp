@@ -57,6 +57,13 @@ public:
     auto updateNode(const NodeEndpoint &node) -> Status;
 
     /**
+     * @brief Mark a node as bad, such as don't respond
+     * 
+     * @param node 
+     */
+    auto markBadNode(const NodeEndpoint &node) -> void;
+
+    /**
      * @brief Find the closest node if us
      * 
      * 
@@ -70,7 +77,7 @@ public:
      * @brief Dump the routing table information to the console
      * 
      */
-    auto dumpInfo() -> void;
+    auto dumpInfo() const -> void;
 private:
     NodeId mId; //< The id of us
     std::array<KBucket, 160> mBuckets; //< The buckets [0] is the closest

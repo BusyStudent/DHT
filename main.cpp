@@ -30,22 +30,18 @@ public:
 
             start();
         });
+
         connect(ui.randButton, &QPushButton::clicked, this, [this]() {
             auto text = NodeId::rand().toHex();
             ui.nodeIdEdit->setText(QString::fromUtf8(text));
         });
+
         connect(ui.pingButton, &QPushButton::clicked, this, [this]() {
-            // ilias_spawn [this]() -> Task<> {
-            //     co_await mSession.ping(IPEndpoint(ui.pingEdit->text().toStdString().c_str()));
-            //     co_return {};
+            // ilias_go [this]() -> Task<> {
+            //     co_await mSession->ping(IPEndpoint(ui.pingEdit->text().toStdString().c_str()));
             // }; 
         });
-        connect(ui.bootstrapButton, &QPushButton::clicked, this, [this]() {
-            // ilias_spawn [this]() -> Task<> {
-            //     co_await mSession.bootstrap(IPEndpoint(ui.bootstrapEdit->text().toStdString().c_str()));
-            //     co_return {};
-            // }; 
-        });
+
         connect(ui.showBucketsButton, &QPushButton::clicked, this, [this]() {
             // auto tree = ui.treeWidget;
             // tree->clear();
@@ -61,6 +57,7 @@ public:
             //     }
             // }
         });
+
         connect(ui.findNodeButton, &QPushButton::clicked, this, [this]() {
             ilias_go [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
                 auto res = co_await mSession->findNode(id);
@@ -70,6 +67,13 @@ public:
                     }
                 }
             }; 
+        });
+
+        connect(ui.dumpButton, &QPushButton::clicked, this, [this]() {
+            if (!mSession) {
+                return;
+            }
+            mSession->routingTable().dumpInfo();
         });
 
         // Try Load config
@@ -88,6 +92,9 @@ public:
         auto nodeId = idText.isEmpty() ? NodeId::rand() : NodeId::fromHex(idText.toStdString().c_str());
         // Make session and start it
         mSession.emplace(mIo, nodeId, endpoint.value());
+        mSession->setOnAnouncePeer([this](const InfoHash &hash, const IPEndpoint &) {
+            onHashFound(hash);
+        });
         mHandle = spawn(mIo, &DhtSession::run, &*mSession);
     }
 
@@ -97,26 +104,40 @@ public:
             mHandle.wait();
         }
     }
+
+    auto onHashFound(const InfoHash &hash) -> void {
+        auto it = mHashs.find(hash);
+        if (it == mHashs.end()) {
+            mHashs.insert(hash);
+            ui.infoHashWidget->addItem(QString::fromStdString(hash.toHex()));
+        }
+    }
 private:
     QIoContext mIo;
     Ui::MainWindow ui;
     std::optional<DhtSession> mSession;
     WaitHandle<> mHandle;
+
+    std::set<InfoHash> mHashs;
 };
 
 int main(int argc, char **argv) {
+
 #ifdef _WIN32
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG);
+
     ::SetConsoleCP(65001);
     ::SetConsoleOutputCP(65001);
     std::setlocale(LC_ALL, ".utf-8");
 #endif
 
-#if __cpp_lib_stacktrace && _WIN32
+#if defined(_WIN32) && defined(__cpp_lib_stacktrace)
     ::SetUnhandledExceptionFilter([](PEXCEPTION_POINTERS) -> LONG {
         std::cerr << "Unhandled exception\n" << std::endl;
         std::cerr << std::stacktrace::current() << std::endl;
         __debugbreak();
-        return EXCEPTION_EXECUTE_HANDLER;
+        return EXCEPTION_CONTINUE_SEARCH;  // 让调试器处理异常
     });
 #endif
 
