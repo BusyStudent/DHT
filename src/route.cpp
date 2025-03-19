@@ -39,6 +39,7 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
     if (it != nodes.end()) {
         // The node already exists, update it
         it->lastSeen = node.lastSeen;
+        it->state = Node::Good; // Mark the node as good
         return Status::Updated;
 
     }
@@ -110,6 +111,40 @@ auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::
     return vec;
 }
 
+auto RoutingTable::nextRefresh() const -> std::optional<NodeEndpoint> {
+    const KBucket *last = nullptr;
+    for (auto &bucket : mBuckets) {
+        if (!last) {
+            if (bucket.nodes.empty()) {
+                continue;
+            }
+            last = &bucket;
+            continue;    
+        }
+        if (bucket.lastUpdate > last->lastUpdate) {
+            last = &bucket;
+        }
+    }
+    if (!last) {
+        return std::nullopt;
+    }
+    // Get the oldest node or questionable node
+    assert(last->nodes.size() > 0);
+    // Get the question node or the oldest node
+    const Node *got = nullptr;
+    for (auto &node : last->nodes) {
+        if (node.state == Node::Questionable) {
+            got = &node;
+            break;
+        }
+        if (!got || got->lastSeen > node.lastSeen) {
+            got = &node;
+        }
+    }
+    assert(got);
+    return got->endpoint;
+}
+
 auto RoutingTable::dumpInfo() const -> void {
 
 #if defined(__cpp_lib_format)
@@ -118,12 +153,14 @@ auto RoutingTable::dumpInfo() const -> void {
     std::format_to(std::back_inserter(text), "Routing Table Info:\n");
     for (size_t i = 0; i < mBuckets.size(); ++i) {
         auto &bucket = mBuckets[i];
-        if (!bucket.nodes.empty()) {
-            std::format_to(std::back_inserter(text), "Bucket: idx {}, nodes: {}\n", i, bucket.nodes.size());
+        if (bucket.nodes.empty()) {
+            continue;
         }
+        std::format_to(std::back_inserter(text), "Bucket: idx {}, nodes: {}\n", i, bucket.nodes.size());
         for (auto &node : bucket.nodes) {
             std::format_to(std::back_inserter(text), "  Node: {}\n", node.endpoint);
-            // std::format_to(std::back_inserter(text), "  Last Seen: {}\n", node.lastSeen);
+            std::format_to(std::back_inserter(text), "    State: {}\n", node.state);
+            std::format_to(std::back_inserter(text), "    Last Seen: {}\n", translateTimepoint(node.lastSeen));
         }
         if (!bucket.pending.empty()) {
             std::format_to(std::back_inserter(text), "  Pending: {}\n", bucket.pending.size());
@@ -131,11 +168,16 @@ auto RoutingTable::dumpInfo() const -> void {
         for (auto &node : bucket.pending) {
             std::format_to(std::back_inserter(text), "    Node: {}\n", node.endpoint);
         }
-        // std::format_to(std::back_inserter(text), "Last Update: {}\n", bucket.lastUpdate);
+        std::format_to(std::back_inserter(text), "  Last Update: {}\n", translateTimepoint(bucket.lastUpdate));
     }
 
     ::fprintf(stderr, "%s", text.c_str());
     ::fflush(stderr);
 #endif
 
+}
+
+auto RoutingTable::translateTimepoint(std::chrono::steady_clock::time_point tp) const -> std::chrono::system_clock::time_point {
+    auto diff = tp - mInitTime;
+    return mInitTimeSystem + std::chrono::duration_cast<std::chrono::system_clock::duration>(diff);
 }

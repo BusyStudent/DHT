@@ -470,7 +470,7 @@ struct std::formatter<BenObject> {
         } 
         else if (cur.isString()) {
             const auto &str = cur.toString();
-            if (std::all_of(str.begin(), str.end(), ::isascii)) {
+            if (std::all_of(str.begin(), str.end(), ::isprint)) {
                 output += indentation + "\"" + str + "\"";
             }
             else {

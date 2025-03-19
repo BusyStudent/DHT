@@ -37,9 +37,9 @@ public:
      * @brief Try to ping a node by ip
      * 
      * @param nodeIp 
-     * @return IoTask<void> 
+     * @return IoTask<NodeId> The nodeid of the pinged node
      */
-    auto ping(const IPEndpoint &nodeIp) -> IoTask<void>;
+    auto ping(const IPEndpoint &nodeIp) -> IoTask<NodeId>;
 
     /**
      * @brief Get the routing table
@@ -48,6 +48,11 @@ public:
      */
     auto routingTable() const -> const RoutingTable &;
 
+    /**
+     * @brief Set the callback triggered when a peer is announced
+     * 
+     * @param callback 
+     */
     auto setOnAnouncePeer(std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback) -> void;
 private:
     struct FindNodeEnv {
@@ -120,11 +125,25 @@ private:
     auto allocateTransactionId() -> std::string;
 
     /**
-     * @brief A user task, to cleanup the peers
+     * @brief A user thread, to cleanup the peers
      * 
      * @return Task<void> 
      */
-    auto cleanupPeersTask() -> Task<void>;
+    auto cleanupPeersThread() -> Task<void>;
+
+    /**
+     * @brief A user thread, to refresh the routing table
+     * 
+     * @return Task<void> 
+     */
+    auto refreshTableThread() -> Task<void>;
+
+    /**
+     * @brief A user thread, to do random search for expand the routing table
+     * 
+     * @return Task<void> 
+     */
+    auto randomSearchThread() -> Task<void>;
 
     IoContext &mCtxt;
     TaskScope  mScope;

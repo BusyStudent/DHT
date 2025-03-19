@@ -22,17 +22,7 @@ struct NodeEndpoint {
     NodeId id;
     IPEndpoint ip;
 
-    auto operator ==(const NodeEndpoint &other) const {
-        return id == other.id && ip == other.ip;
-    }
-
-    auto operator !=(const NodeEndpoint &other) const {
-        return !(*this == other);
-    }
-
-    auto operator <(const NodeEndpoint &other) const {
-        return id < other.id;
-    }
+    auto operator <=>(const NodeEndpoint &) const noexcept = default;
 };
 
 inline auto getMessageType(const BenObject &msg) -> MessageType {
@@ -397,7 +387,7 @@ struct FindNodeReply {
 struct GetPeersQuery {
     std::string transId;
     NodeId   id; //< which node give this query
-    NodeId   infoHash; //< target hash
+    InfoHash infoHash; //< target hash
 
     auto operator <=>(const GetPeersQuery &) const = default;
 
@@ -548,7 +538,7 @@ struct ErrorReply {
 struct AnnouncePeerQuery {
     std::string transId;
     NodeId id;
-    std::string infoHash;
+    InfoHash infoHash;
     std::string token;
     uint16_t port = 0;
     bool impliedPort = true;
@@ -560,7 +550,7 @@ struct AnnouncePeerQuery {
         msg["q"] = "announce_peer";
         msg["a"] = BenObject::makeDict();
         msg["a"]["id"] = id.toStringView();
-        msg["a"]["info_hash"] = infoHash;
+        msg["a"]["info_hash"] = infoHash.toStringView();
         msg["a"]["token"] = token;
         msg["a"]["port"] = port;
         msg["a"]["implied_port"] = int(impliedPort);
@@ -575,16 +565,14 @@ struct AnnouncePeerQuery {
             AnnouncePeerQuery query;
             query.transId = getMessageTransactionId(msg);
             auto id = msg["a"]["id"].toString();
-            if (id.size() != 20) {
+            auto hash = msg["a"]["info_hash"].toString();
+            if (id.size() != 20 || hash.size() != 20) {
                 return std::nullopt;
             }
             query.id = NodeId::from(id.data(), id.size());
-            query.infoHash = msg["a"]["info_hash"].toString();
+            query.infoHash = InfoHash::from(hash.data(), hash.size());
             query.token = msg["a"]["token"].toString();
             query.port = msg["a"]["port"].toInt();
-            if (query.infoHash.size() != 20) {
-                return std::nullopt;
-            }
             if (auto &impliedPort = msg["a"]["implied_port"]; impliedPort.isInt()) {
                 query.impliedPort = (impliedPort.toInt() != 0);
             }
@@ -628,6 +616,31 @@ struct AnnouncePeerReply {
             return std::nullopt;
         }
     }
+};
+
+struct SampleInfoHashesQuery {
+    std::string transId;
+    NodeId id;
+    NodeId target; // For forward compatibility (see BEP-0051) if the client node doesn support this, it should treat it as a find_node query, it has same meaning on find_node
+
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenObject::makeDict();
+        msg["t"] = transId;
+        msg["y"] = "q";
+        msg["q"] = "sample_infohashes";
+        msg["a"] = BenObject::makeDict();
+        msg["a"]["id"] = id.toStringView();
+        msg["a"]["target"] = target.toStringView();
+        return msg;
+    }
+};
+
+struct SampleInfoHashesReply {
+    std::string transId;
+    NodeId id;
+    int interval; // The time in seconds the client should wait between sending queries (on seconds)
+    std::vector<NodeEndpoint> nodes; // The closest nodes to the target
+    std::vector<InfoHash> samples; // The infohashes we sampled
 };
 
 template <>

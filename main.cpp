@@ -37,9 +37,21 @@ public:
         });
 
         connect(ui.pingButton, &QPushButton::clicked, this, [this]() {
-            // ilias_go [this]() -> Task<> {
-            //     co_await mSession->ping(IPEndpoint(ui.pingEdit->text().toStdString().c_str()));
-            // }; 
+            ilias_go [this, endpoint = IPEndpoint(ui.pingEdit->text().toStdString().c_str())]() -> Task<> {
+                if (!endpoint.isValid()) {
+                    ui.statusbar->showMessage("Invalid endpoint");
+                    co_return;
+                }
+                auto res = co_await mSession->ping(endpoint);
+                if (!res) {
+                    auto message = std::format("Ping {} failed by {}", endpoint, res.error());
+                    ui.statusbar->showMessage(QString::fromUtf8(message));
+                }
+                else {
+                    auto message = std::format("Ping {} success, peer id {}", endpoint, *res);
+                    ui.statusbar->showMessage(QString::fromUtf8(message));
+                }
+            }; 
         });
 
         connect(ui.showBucketsButton, &QPushButton::clicked, this, [this]() {

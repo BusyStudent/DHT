@@ -125,18 +125,18 @@ TEST(Kad, Rpc) {
 
     // Parse for ping reply and request
     auto pingQueryEncoded = "d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y1:qe";
-    auto pingQuery = PingQuery::fromMessage(BenObject::decode(pingQueryEncoded));
+    auto pingQuery = PingQuery::fromMessage(BenObject::decode(pingQueryEncoded)).value();
     ASSERT_EQ(pingQuery.toMessage().encode(), pingQueryEncoded);
     ASSERT_EQ(pingQuery.id, NodeId::from("abcdefghij0123456789"));
 
     auto pingReplyEncoded = "d1:rd2:id20:mnopqrstuvwxyz123456e1:t2:aa1:y1:re";
-    auto pingReply = PingReply::fromMessage(BenObject::decode(pingReplyEncoded));
+    auto pingReply = PingReply::fromMessage(BenObject::decode(pingReplyEncoded)).value();
     ASSERT_EQ(pingReply.toMessage().encode(), pingReplyEncoded);
     ASSERT_EQ(pingReply.id, NodeId::from("mnopqrstuvwxyz123456"));
 
     // Parse for error reply
     auto errorEncoded = ("d1:eli201e23:A Generic Error Ocurrede1:t2:aa1:y1:ee");
-    auto errorReply = ErrorReply::fromMessage(BenObject::decode(errorEncoded));
+    auto errorReply = ErrorReply::fromMessage(BenObject::decode(errorEncoded)).value();
     std::cout << errorReply.error << std::endl;
     ASSERT_EQ(errorReply.error, "A Generic Error Ocurred");
     ASSERT_EQ(errorReply.errorCode, 201);

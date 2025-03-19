@@ -74,12 +74,47 @@ public:
     auto findClosestNodes(const NodeId &id, size_t max = 1) const -> std::vector<NodeEndpoint>;
 
     /**
+     * @brief Get the next node endpoint to refresh
+     * 
+     * @return std::optional<NodeEndpoint> 
+     */
+    auto nextRefresh() const -> std::optional<NodeEndpoint>;
+
+    /**
      * @brief Dump the routing table information to the console
      * 
      */
     auto dumpInfo() const -> void;
 private:
+    auto translateTimepoint(std::chrono::steady_clock::time_point) const -> std::chrono::system_clock::time_point;
+
     NodeId mId; //< The id of us
     std::array<KBucket, 160> mBuckets; //< The buckets [0] is the closest
     std::set<IPEndpoint> mIps;
+
+    // The time when the routing table is initialized, used to translate steady clock to system clock
+    std::chrono::steady_clock::time_point mInitTime = std::chrono::steady_clock::now();
+    std::chrono::system_clock::time_point mInitTimeSystem = std::chrono::system_clock::now();
+};
+
+template <>
+struct std::formatter<Node::State> : std::formatter<std::string> {
+    constexpr auto parse(std::format_parse_context &ctxt) const {
+        return ctxt.begin();
+    }
+    auto format(const Node::State &state, auto &ctxt) const {
+        std::string_view text = "Unknown";
+        switch (state) {
+            case Node::State::Good:
+                text = "Good";
+                break;
+            case Node::State::Questionable:
+                text = "Questionable";
+                break;
+            case Node::State::Bad:
+                text = "Bad";
+                break;
+        }
+        return std::format_to(ctxt.out(), "{}",text);
+    }
 };

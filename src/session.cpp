@@ -4,8 +4,8 @@
 
 using namespace std::literals;
 
-constexpr auto MAX_DEPTH = 8;
-constexpr auto BFS_UNTIL = 2;
+inline constexpr auto MAX_DEPTH = 8;
+inline constexpr auto BFS_UNTIL = 2;
 
 DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, const IPEndpoint &addr) : 
     mCtxt(ctxt), mScope(ctxt), mClient(ctxt, addr.family()), 
@@ -51,7 +51,9 @@ auto DhtSession::run() -> Task<void> {
         co_return;
     }
     // Do normal DHT management
-    mScope.spawn(cleanupPeersTask());
+    mScope.spawn(cleanupPeersThread());
+    mScope.spawn(refreshTableThread());
+    mScope.spawn(randomSearchThread());
     // Join the scope
     co_await mScope;
     co_return;
@@ -142,12 +144,11 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
             DHT_LOG("Invalid announce peer query");
             co_return {};
         }
-        auto infoHash = InfoHash::from(announce->infoHash.data(), announce->infoHash.size());
-        DHT_LOG("Announce peer infoHash {} from {}", infoHash, from);
+        DHT_LOG("Announce peer infoHash {} from {}", announce->infoHash, from);
         if (mOnAnnouncePeer) {
-            mOnAnnouncePeer(infoHash, from);
+            mOnAnnouncePeer(announce->infoHash, from);
         }
-        mPeers[infoHash].insert(from);
+        mPeers[announce->infoHash].insert(from);
         mRoutingTable.updateNode({announce->id, from});
         auto reply = AnnouncePeerReply {
             .transId = announce->transId,
@@ -235,8 +236,28 @@ auto DhtSession::findNode(const NodeId &target)
     co_return res;
 }
 
+auto DhtSession::ping(const IPEndpoint &nodeIp) -> IoTask<NodeId> {
+    PingQuery query {
+        .transId = allocateTransactionId(),
+        .id = mId
+    };
+    auto res = co_await sendKrpc(query.toMessage(), nodeIp);
+    if (!res) {
+        co_return unexpected(res.error());
+    }
+    auto &[message, from] = *res;
+    if (isErrorMessage(message)) {
+        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+    }
+    auto reply = PingReply::fromMessage(message);
+    if (!reply) {
+        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+    }
+    co_return reply->id;
+}
+
 auto DhtSession::routingTable() const -> const RoutingTable & {
-    return mRoutingTable;
+  return mRoutingTable;
 }
 
 auto DhtSession::setOnAnouncePeer(
@@ -413,6 +434,7 @@ auto DhtSession::processInput() -> Task<void> {
         if (type == MessageType::Reply || type == MessageType::Error) {
             auto it = mPendingQueries.find(id); //< Try find the query of the reply
             if (it == mPendingQueries.end()) {
+                ILIAS_LOG("DhtSession::processInput unknown reply: {} from endpoint {}, no pending query matched", message);
                 continue;
             }
             auto sender = std::move(it->second);
@@ -437,13 +459,64 @@ auto DhtSession::allocateTransactionId() -> std::string {
     return std::string(reinterpret_cast<const char*>(&mTransactionId), sizeof(mTransactionId));
 }
 
-auto DhtSession::cleanupPeersTask() -> Task<void> { 
+auto DhtSession::cleanupPeersThread() -> Task<void> { 
     while (true) {
         auto res = co_await sleep(15min);
         if (!res) {
-            DHT_LOG("DhtSession::cleanupPeersTask request quit");
+            DHT_LOG("DhtSession::cleanupPeersThread request quit");
             break;
         }
         mPeers.clear();
+        DHT_LOG("DhtSession::cleanupPeersThread clear peers");
+    }
+}
+
+auto DhtSession::refreshTableThread() -> Task<void> { 
+    while (true) {
+        if (auto res = co_await sleep(1min); !res) {
+            DHT_LOG("DhtSession::refreshTableThread request quit");
+            break;
+        }
+        auto node = mRoutingTable.nextRefresh();
+        if (!node) {
+            continue;
+        }
+        // Send ping request
+        auto res = co_await ping(node->ip);
+        if (!res && res.error() == Error::Canceled) {
+            DHT_LOG("DhtSession::refreshTableThread request quit");
+            break;
+        }
+        if (!res) {
+            DHT_LOG("DhtSession::refreshTableThread send ping request to {} failed: {}", *node, res.error());
+            mRoutingTable.markBadNode(*node);
+            continue;
+        }
+        if (*res != node->id) {
+            DHT_LOG("DhtSession::refreshTableThread send ping request to {} failed: id mismatch", *node);
+            mRoutingTable.markBadNode(*node);
+            continue;
+        }
+        mRoutingTable.updateNode(*node);
+        DHT_LOG("DhtSession::refreshTableThread send ping request to {} success", *node);
+    }
+}
+
+auto DhtSession::randomSearchThread() -> Task<void> { 
+    while (true) {
+        if (auto res = co_await sleep(5min); !res) { // Do random search every 5 minutes
+            DHT_LOG("DhtSession::randomSearchThread request quit");
+            break;
+        }
+        auto res = co_await findNode(NodeId::rand());
+        if (!res && res.error() == Error::Canceled) {
+            DHT_LOG("DhtSession::randomSearchThread request quit");
+            break;
+        }
+        if (!res) {
+            DHT_LOG("DhtSession::randomSearchThread find node failed: {}", res.error());
+            continue;
+        }
+        DHT_LOG("DhtSession::randomSearchThread done random search");
     }
 }
