@@ -3,6 +3,7 @@
 #include <ilias/sync.hpp>
 #include <ilias/net.hpp>
 #include <functional>
+#include <random>
 #include <chrono>
 #include <vector>
 #include <set>
@@ -49,11 +50,26 @@ public:
     auto routingTable() const -> const RoutingTable &;
 
     /**
+     * @brief Get the routing table
+     * 
+     * @return RoutingTable& 
+     */
+    auto routingTable() -> RoutingTable &;
+
+    /**
      * @brief Set the callback triggered when a peer is announced
      * 
      * @param callback 
      */
     auto setOnAnouncePeer(std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback) -> void;
+
+    /**
+     * @brief Get the sample info hashes from the routing table
+     * 
+     * @param nodeIp The node ip to sample
+     * @return IoTask<std::vector<InfoHash> >  The sampled info hashes
+     */
+    auto sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vector<InfoHash> >;
 private:
     struct FindNodeEnv {
         std::set<NodeEndpoint> visited;
@@ -152,6 +168,7 @@ private:
     NodeId     mId;
     RoutingTable mRoutingTable;
     std::chrono::milliseconds mTimeout = std::chrono::seconds(2);
+    std::mt19937 mRandom { std::random_device{}() };
 
     std::map<
         std::string, 
@@ -164,4 +181,37 @@ private:
         std::set<IPEndpoint> //< Use set to avoid duplicate
     > mPeers; //< The peers they announced
     std::function<void(const InfoHash &hash, const IPEndpoint &peer)> mOnAnnouncePeer; //< The callback when we got a announce peer
+
+    // Config
+    bool mSkipBootstrap = false;
 };
+
+enum class KrpcError {
+    BadReply,
+    BadQuery,
+    TargetNotFound, // The target node is not found
+    RpcErrorMessage, // The per send error message
+};
+
+class KrpcErrorCategory final : public ErrorCategory {
+public:
+    auto name() const  -> std::string_view override {
+        return "krpc";
+    }
+
+    auto message(int64_t ev) const -> std::string override {
+        switch (KrpcError(ev)) {
+            case KrpcError::BadQuery: return "Bad Query";
+            case KrpcError::BadReply: return "Bad Reply";
+            case KrpcError::RpcErrorMessage: return "The remote send rpc error message";
+            default: return "Unknown Error";
+        }
+    }
+
+    static auto instance() -> const KrpcErrorCategory & {
+        static KrpcErrorCategory c;
+        return c;
+    }
+};
+
+ILIAS_DECLARE_ERROR(KrpcError, KrpcErrorCategory);

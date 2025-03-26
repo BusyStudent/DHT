@@ -25,6 +25,11 @@ struct NodeEndpoint {
     auto operator <=>(const NodeEndpoint &) const noexcept = default;
 };
 
+template <typename T>
+inline auto toCharArray(const T &t) -> std::array<char, sizeof(T)> {
+    return std::bit_cast<std::array<char, sizeof(T)> >(t);
+}
+
 inline auto getMessageType(const BenObject &msg) -> MessageType {
     const auto &y = msg["y"];
     if (y == "q") {
@@ -45,12 +50,14 @@ inline auto encodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
     switch (endpoint.family()) {
         case AF_INET: {
             auto addr = endpoint.address4();
-            ret.append(reinterpret_cast<const char*>(&addr), sizeof(addr));
+            auto str = toCharArray(addr);
+            ret.append(str.data(), str.size());
             break;
         }
         case AF_INET6: {
             auto addr = endpoint.address6();
-            ret.append(reinterpret_cast<const char*>(&addr), sizeof(addr));
+            auto str = toCharArray(addr);
+            ret.append(str.data(), str.size());
             break;
         }
         default: {
@@ -58,7 +65,8 @@ inline auto encodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
         }
     }
     auto port = ::htons(endpoint.port());
-    ret.append(reinterpret_cast<const char*>(&port), sizeof(port));
+    auto str = toCharArray(port);
+    ret.append(str.begin(), str.end());
     return ret;
 }
 
@@ -78,35 +86,22 @@ inline auto decodeIPEndpoint(std::string_view endpoint) -> IPEndpoint {
     return IPEndpoint(address, ::ntohs(port));
 }
 
-inline auto decodeIPEndpoints(std::string_view endpoints) -> std::vector<IPEndpoint> {
-    std::vector<IPEndpoint> ret;
-    // Check is V6 or v4
-    size_t stride = 0;
-    if (endpoints.size() % 6 == 0) {
-        stride = 6; // IPv4
-    }
-    else if (endpoints.size() % 18 == 0) {
-        stride = 18; // IPv6
-    }
-    else {
-        assert(false);
-    }
-    for (size_t i = 0; i < endpoints.size(); i += stride) {
-        ret.emplace_back(decodeIPEndpoint(endpoints.substr(i, stride)));
-    }
-    return ret;
-}
-
-inline auto decodeNodes(std::string_view nodes) -> std::vector<NodeEndpoint> {
+inline auto decodeNodes(std::string_view nodes) -> std::optional<std::vector<NodeEndpoint> > {
     // Check is V6 or v4
     if (nodes.size() % 26 == 0) {
         // IPv4
         std::vector<NodeEndpoint> ret;
         for (size_t i = 0; i < nodes.size(); i += 26) {
-            auto str = nodes.substr(i, 20);
-            auto id = NodeId::from(str.data(), str.size());
-            auto ip = decodeIPEndpoint(nodes.substr(i + 20, 6));
-            ret.emplace_back(id, ip);
+            auto data = nodes.substr(i, 26);
+            if (data.size() != 26) {
+                return std::nullopt;
+            }
+            auto id = NodeId::from(data.data(), 20);
+            auto addr = IPAddress::fromRaw(data.data() + 20, 4);
+            if (!addr) return std::nullopt;
+            auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
+            port = ::ntohs(port);
+            ret.emplace_back(id, IPEndpoint(addr.value(), port));
         }
         return ret;
     }
@@ -114,15 +109,21 @@ inline auto decodeNodes(std::string_view nodes) -> std::vector<NodeEndpoint> {
         // IPv6
         std::vector<NodeEndpoint> ret;
         for (size_t i = 0; i < nodes.size(); i += 38) {
-            auto str = nodes.substr(i, 32);
-            auto id = NodeId::from(str.data(), str.size());
-            auto ip = decodeIPEndpoint(nodes.substr(i + 32, 6));
-            ret.emplace_back(id, ip);
+            auto data = nodes.substr(i, 38);
+            if (data.size() != 38) {
+                return std::nullopt;
+            }
+            auto id = NodeId::from(data.data(), 20);
+            auto addr = IPAddress::fromRaw(data.data() + 20, 16);
+            if (!addr) return std::nullopt;
+            auto port = *reinterpret_cast<const uint16_t*>(data.data() + 36);
+            port = ::ntohs(port);
+            ret.emplace_back(id, IPEndpoint(addr.value(), port));
         }
         return ret;
     }
     else {
-        assert(false);
+        return std::nullopt;
     }
 }
 
@@ -346,34 +347,18 @@ struct FindNodeReply {
             reply.id = NodeId::from(id.data(), id.size());
 
             if (auto &nodesObject = msg["r"]["nodes"]; nodesObject.isString()) {
-                auto &nodes = nodesObject.toString();
-                for (size_t i = 0; i < nodes.size(); i += 26) {
-                    auto data = nodes.substr(i, 26);
-                    if (data.size() != 26) {
-                        return std::nullopt;
-                    }
-                    auto id = NodeId::from(data.data(), 20);
-                    auto addr = IPAddress::fromRaw(data.data() + 20, 4);
-                    if (!addr) return std::nullopt;
-                    auto port = *reinterpret_cast<const uint16_t*>(data.data() + 24);
-                    port = ::ntohs(port);
-                    reply.nodes.emplace_back(id, IPEndpoint(addr.value(), port));
+                auto nodes = decodeNodes(nodesObject.toString());
+                if (!nodes) {
+                    return std::nullopt;
                 }
+                reply.nodes = std::move(*nodes);
             }
             else if (auto &nodesObject = msg["r"]["nodes6"]; nodesObject.isString()) {
-                auto &nodes = nodesObject.toString();
-                for (size_t i = 0; i < nodes.size(); i += 38) {
-                    auto data = nodes.substr(i, 38);
-                    if (data.size() != 38) {
-                        return std::nullopt;
-                    }
-                    auto id = NodeId::from(data.data(), 20);
-                    auto addr = IPAddress::fromRaw(data.data() + 20, 16);
-                    if (!addr) return std::nullopt;
-                    auto port = *reinterpret_cast<const uint16_t*>(data.data() + 36);
-                    port = ::ntohs(port);
-                    reply.nodes.emplace_back(id, IPEndpoint(addr.value(), port));
+                auto nodes = decodeNodes(nodesObject.toString());
+                if (!nodes) {
+                    return std::nullopt;
                 }
+                reply.nodes = std::move(*nodes);
             }
             return reply;
         }
@@ -479,10 +464,14 @@ struct GetPeersReply {
             reply.id = NodeId::from(id.data(), id.size());
             reply.token = msg["r"]["token"].toString();
             if (auto &nodes = msg["r"]["nodes"]; nodes.isString()) {
-                reply.nodes = decodeNodes(nodes.toString());
+                auto res = decodeNodes(nodes.toString());
+                if (!res) return std::nullopt;
+                reply.nodes = std::move(*res);
             }
             else if (auto &nodes = msg["r"]["nodes6"]; nodes.isString()) {
-                reply.nodes = decodeNodes(nodes.toString());
+                auto res = decodeNodes(nodes.toString());
+                if (!res) return std::nullopt;
+                reply.nodes = std::move(*res);
             }
             else {
                 // WTF?
@@ -633,6 +622,28 @@ struct SampleInfoHashesQuery {
         msg["a"]["target"] = target.toStringView();
         return msg;
     }
+
+    static auto fromMessage(const BenObject &msg) -> std::optional<SampleInfoHashesQuery> {
+        try {
+            if (!isQueryMessage(msg)) {
+                return std::nullopt;
+            }
+            SampleInfoHashesQuery query;
+            query.transId = getMessageTransactionId(msg);
+            auto id = msg["a"]["id"].toString();
+            auto target = msg["a"]["target"].toString();
+            if (id.size() != 20 || target.size() != 20) {
+                return std::nullopt;
+            }
+            query.id = NodeId::from(id.data(), id.size());
+            query.target = NodeId::from(target.data(), target.size());
+            return query;
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse sample_infohashes query: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
+    }
 };
 
 struct SampleInfoHashesReply {
@@ -640,7 +651,87 @@ struct SampleInfoHashesReply {
     NodeId id;
     int interval; // The time in seconds the client should wait between sending queries (on seconds)
     std::vector<NodeEndpoint> nodes; // The closest nodes to the target
+    int num; // The number of samples it have
     std::vector<InfoHash> samples; // The infohashes we sampled
+
+    auto toMessage() const -> BenObject {
+        BenObject msg = BenObject::makeDict();
+        msg["t"] = transId;
+        msg["y"] = "r";
+        msg["r"] = BenObject::makeDict();
+        msg["r"]["id"] = id.toStringView();
+        msg["r"]["interval"] = interval;
+        
+        std::string nodesStr;
+        bool v6 = false;
+        for (auto &node : nodes) {
+            nodesStr += node.id.toStringView();
+            nodesStr += encodeIPEndpoint(node.ip);
+            v6 = v6 || node.ip.family() == AF_INET6;
+        }
+        if (!nodesStr.empty()) {
+            if (v6) {
+                msg["r"]["nodes6"] = nodesStr;
+            }
+            else {
+                msg["r"]["nodes"] = nodesStr;
+            }
+        }
+
+        std::string samplesStr;
+        for (auto &hash : samples) {
+            samplesStr += hash.toStringView();
+        }
+        msg["r"]["samples"] = samplesStr;
+        msg["r"]["num"] = num;
+        return msg;
+    }
+
+    static auto fromMessage(const BenObject &msg) -> std::optional<SampleInfoHashesReply> {
+        try {
+            if (!isReplyMessage(msg)) {
+                return std::nullopt;
+            }
+            SampleInfoHashesReply reply;
+            
+            // Commmon fields
+            reply.transId = getMessageTransactionId(msg);
+            auto id = msg["r"]["id"].toString();
+            if (id.size() != 20) {
+                return std::nullopt;
+            }
+            reply.id = NodeId::from(id.data(), id.size());
+            if (auto &nodes = msg["r"]["nodes"]; nodes.isString()) {
+                reply.nodes = decodeNodes(nodes.toString()).value();                
+            }
+            else if (auto &nodes = msg["r"]["nodes6"]; nodes.isString()) {
+                reply.nodes = decodeNodes(nodes.toString()).value();
+            }
+            else {
+                // WTF?
+            }
+
+            if (auto &interval = msg["r"]["interval"]; interval.isInt()) { // The peer understand this extension
+                reply.interval = interval.toInt();
+                auto num = msg["r"]["num"].toInt();
+                auto samples = msg["r"]["samples"].toString();
+                if (samples.size() % 20 != 0) { // Invalid number of samples
+                    DHT_LOG("Invalid length of samples: {}", samples.size());
+                    return std::nullopt;
+                }
+                for (size_t i = 0; i < samples.size() / 20; ++i) {
+                    auto slice = std::string_view(samples).substr(i * 20, 20);
+                    reply.samples.push_back(InfoHash::from(slice.data(), slice.size()));
+                }
+                reply.num = num;
+            }
+            return reply;
+        }
+        catch (const std::exception &e) {
+            DHT_LOG("Failed to parse sample_infohashes reply: {}, msg: {}", e.what(), msg);
+            return std::nullopt;
+        }
+    }
 };
 
 template <>
@@ -653,9 +744,3 @@ struct std::formatter<NodeEndpoint> {
         return std::format_to(ctxt.out(), "{} :{}", endpoint.id, endpoint.ip);
     }
 };
-
-inline auto sortNodeEndpointList(std::vector<NodeEndpoint> &vec, const NodeId &target) -> void {
-    std::sort(vec.begin(), vec.end(), [&](const auto &a, const auto &b) {
-        return a.id.distance(target) < b.id.distance(target);
-    });
-}

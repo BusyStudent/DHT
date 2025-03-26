@@ -85,8 +85,23 @@ public:
      * 
      */
     auto dumpInfo() const -> void;
+
+    /**
+     * @brief The size of the node in the routing table
+     * 
+     * @return size_t 
+     */
+    auto size() const -> size_t;
+
+    /**
+     * @brief Set the Callback on node changed
+     * 
+     * @param callback 
+     */
+    auto setOnNodeChanged(std::function<void ()> &&callback) -> void;
 private:
     auto translateTimepoint(std::chrono::steady_clock::time_point) const -> std::chrono::system_clock::time_point;
+    auto notifyChanged() -> void;
 
     NodeId mId; //< The id of us
     std::array<KBucket, 160> mBuckets; //< The buckets [0] is the closest
@@ -95,10 +110,13 @@ private:
     // The time when the routing table is initialized, used to translate steady clock to system clock
     std::chrono::steady_clock::time_point mInitTime = std::chrono::steady_clock::now();
     std::chrono::system_clock::time_point mInitTimeSystem = std::chrono::system_clock::now();
+
+    // The Callback for notify the routing tabel change
+    std::function<void ()> mOnNodeChanged;
 };
 
 template <>
-struct std::formatter<Node::State> : std::formatter<std::string> {
+struct std::formatter<Node::State> {
     constexpr auto parse(std::format_parse_context &ctxt) const {
         return ctxt.begin();
     }

@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QStatusBar>
 #include <QFile>
 #include <optional>
 #include "ui_main.h"
@@ -75,11 +76,35 @@ public:
                 auto res = co_await mSession->findNode(id);
                 if (res) {
                     for (auto &node : *res) {
-                        std::cout << "Found node: " << node.id.toHex() << std::endl;                        
+                        auto str = std::format("node {} at {}", node.id, node.ip);
+                        ui.logWidget->addItem(QString::fromUtf8(str));
                     }
                 }
             }; 
         });
+
+        connect(ui.sampleButton, &QPushButton::clicked, this, [this]() {
+            ilias_go [this, endpoint = IPEndpoint(ui.sampleEdit->text().toStdString().c_str())]() -> Task<> {
+                if (!endpoint.isValid()) {
+                    ui.statusbar->showMessage("Invalid endpoint");
+                    co_return;
+                }
+                auto res = co_await mSession->sampleInfoHashes(endpoint);
+                if (!res) {
+                    auto message = std::format("Sample {} failed by {}", endpoint, res.error());
+                    co_return;
+                }
+                if (res->empty()) {
+                    auto message = std::format("No Message sampled from {}", endpoint);
+                    ui.logWidget->addItem("");
+                }
+                for (auto &hash : *res) {
+                    auto message = std::format("Sample {} success, hash {}", endpoint, hash);
+                    ui.logWidget->addItem(QString::fromUtf8(message));
+                }
+            };
+        });
+
 
         connect(ui.dumpButton, &QPushButton::clicked, this, [this]() {
             if (!mSession) {
@@ -106,6 +131,9 @@ public:
         mSession.emplace(mIo, nodeId, endpoint.value());
         mSession->setOnAnouncePeer([this](const InfoHash &hash, const IPEndpoint &) {
             onHashFound(hash);
+        });
+        mSession->routingTable().setOnNodeChanged([&, this]() {
+            setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size()));
         });
         mHandle = spawn(mIo, &DhtSession::run, &*mSession);
     }

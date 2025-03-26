@@ -33,6 +33,7 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
             pending.pop_front();
         }
         pending.emplace_back(std::move(node));
+        notifyChanged();
         return Status::Pending;
     }
     bucket.lastUpdate = std::chrono::steady_clock::now();
@@ -44,6 +45,7 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
 
     }
     nodes.emplace_back(std::move(node));
+    notifyChanged();
     return Status::Added;
 }
 
@@ -69,6 +71,7 @@ auto RoutingTable::markBadNode(const NodeEndpoint &node) -> void {
         bucket.pending.pop_front();
         DHT_LOG("Replaced node {} with pending node {}", node.id, nodes.back().endpoint.id);
     }
+    notifyChanged();
 }
 
 auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::vector<NodeEndpoint> {
@@ -177,7 +180,25 @@ auto RoutingTable::dumpInfo() const -> void {
 
 }
 
+auto RoutingTable::size() const -> size_t {
+    size_t num = 0;
+    for (auto &bucket : mBuckets) {
+        num += bucket.nodes.size();
+    }
+    return num;
+}
+
+auto RoutingTable::setOnNodeChanged(std::function<void()> &&callback) -> void {
+    mOnNodeChanged = std::move(callback);
+}
+
 auto RoutingTable::translateTimepoint(std::chrono::steady_clock::time_point tp) const -> std::chrono::system_clock::time_point {
     auto diff = tp - mInitTime;
     return mInitTimeSystem + std::chrono::duration_cast<std::chrono::system_clock::duration>(diff);
+}
+
+auto RoutingTable::notifyChanged() -> void {
+    if (mOnNodeChanged) {
+        mOnNodeChanged();
+    }
 }

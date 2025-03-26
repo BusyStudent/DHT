@@ -7,6 +7,24 @@ using namespace std::literals;
 inline constexpr auto MAX_DEPTH = 8;
 inline constexpr auto BFS_UNTIL = 2;
 
+namespace node_utils {
+
+/**
+ * @brief Sort the vector of NodeEndpoint by the distance to the target and remove duplicates
+ * 
+ * @param vec 
+ * @param target 
+ * @return auto 
+ */
+auto sort(std::vector<NodeEndpoint> &vec, const NodeId &target) {
+    std::sort(vec.begin(), vec.end(), [&target](const NodeEndpoint &a, const NodeEndpoint &b) {
+        return a.id.distance(target) < b.id.distance(target);
+    });
+    vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+}
+
+}
+
 DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, const IPEndpoint &addr) : 
     mCtxt(ctxt), mScope(ctxt), mClient(ctxt, addr.family()), 
     mEndpoint(addr), mId(id), mRoutingTable(id)
@@ -23,32 +41,34 @@ DhtSession::~DhtSession() {
 auto DhtSession::run() -> Task<void> { 
     auto handle = mScope.spawn(&DhtSession::processInput, this);
     const auto bootstrapNodes = {
-        // std::pair{"router.bittorrent.com", "6881"},
+        std::pair{"router.bittorrent.com", "6881"},
         std::pair{"dht.transmissionbt.com", "6881"},
         std::pair{"router.utorrent.com", "6881"}
     };
-    bool booststraped = false;
-    for (const auto [host, port] : bootstrapNodes) {
-        addrinfo_t hints {
-            .ai_family = mEndpoint.family()
-        };
-        auto info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
-        if (!info) {
-            continue;
-        }
-        for (auto &endpoint : info->endpoints()) {
-            if (auto ret = co_await bootstrap(endpoint); ret) {
-                booststraped = true;
+    if (!mSkipBootstrap) {
+        bool booststraped = false;
+        for (const auto [host, port] : bootstrapNodes) {
+            addrinfo_t hints {
+                .ai_family = mEndpoint.family()
+            };
+            auto info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
+            if (!info) {
+                continue;
+            }
+            for (auto &endpoint : info->endpoints()) {
+                if (auto ret = co_await bootstrap(endpoint); ret) {
+                    booststraped = true;
+                    break;
+                }
+            }
+            if (booststraped) {
                 break;
             }
         }
-        if (booststraped) {
-            break;
+        if (!booststraped) {
+            DHT_LOG("Failed to bootstrap");
+            co_return;
         }
-    }
-    if (!booststraped) {
-        DHT_LOG("Failed to bootstrap");
-        co_return;
     }
     // Do normal DHT management
     mScope.spawn(cleanupPeersThread());
@@ -89,7 +109,6 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
         mRoutingTable.updateNode({find->id, from});
         if (nodes.empty()) {
             DHT_LOG("No nodes found for {}", find->targetId);
-            co_return {}; // TODO: Maybe send a failure
         }
         auto reply = FindNodeReply {
             .transId = find->transId,
@@ -126,9 +145,13 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
             auto &[_, set] = *it;
             for (auto &peer : set) {
                 reply.values.push_back(peer);
-                if (reply.values.size() >= KBUCKET_SIZE) {
+                if (reply.values.size() >= 100) { // TOO MANY PEERS
                     break;
                 }
+            }
+            // If bigger than 8 random peers, send the reply
+            if (reply.values.size() >= KBUCKET_SIZE) {
+                std::shuffle(reply.values.begin(), reply.values.end(), mRandom);
             }
         }
         auto encoded = reply.toMessage().encode();
@@ -226,9 +249,7 @@ auto DhtSession::findNode(const NodeId &target)
         }
     }
     // Sort it by distance
-    std::sort(res.begin(), res.end(), [&](const auto &a, const auto &b) {
-        return a.id.distance(target) < b.id.distance(target);
-    });
+    node_utils::sort(res, target);
     // Trim if exceeds 8
     if (res.size() > KBUCKET_SIZE) {
         res.resize(KBUCKET_SIZE);
@@ -247,23 +268,50 @@ auto DhtSession::ping(const IPEndpoint &nodeIp) -> IoTask<NodeId> {
     }
     auto &[message, from] = *res;
     if (isErrorMessage(message)) {
-        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+        co_return unexpected(KrpcError::RpcErrorMessage);
     }
     auto reply = PingReply::fromMessage(message);
     if (!reply) {
-        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+        co_return unexpected(KrpcError::BadReply);
     }
     co_return reply->id;
 }
 
 auto DhtSession::routingTable() const -> const RoutingTable & {
-  return mRoutingTable;
+    return mRoutingTable;
 }
+
+auto DhtSession::routingTable() -> RoutingTable & {
+    return mRoutingTable;
+}  
 
 auto DhtSession::setOnAnouncePeer(
     std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback)
     -> void {
   mOnAnnouncePeer = std::move(callback);
+}
+
+auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp)
+    -> IoTask<std::vector<InfoHash> > 
+{
+    SampleInfoHashesQuery query {
+        .transId = allocateTransactionId(),
+        .id = mId,
+        .target = NodeId::rand()
+    };
+    auto res = co_await sendKrpc(query.toMessage(), nodeIp);
+    if (!res) {
+        co_return unexpected(res.error());
+    }
+    auto &[message, from] = *res;
+    if (isErrorMessage(message)) {
+        co_return unexpected(KrpcError::RpcErrorMessage);
+    }
+    auto reply = SampleInfoHashesReply::fromMessage(message);
+    if (!reply) {
+        co_return unexpected(KrpcError::BadReply);
+    }
+    co_return reply->samples;
 }
 
 auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env)
@@ -284,26 +332,26 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
         if (id) { // If the id is known, try to mark it as bad node in routing table
             mRoutingTable.markBadNode({*id, endpoint});
         }
-        // TODO: If the error is timeout and id is known, try to mark it as bad node in routing table
         co_return unexpected(res.error());
     }
     auto &[message, from] = *res;
     if (isErrorMessage(message)) {
-        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+        co_return unexpected(KrpcError::RpcErrorMessage);
     }
 
     auto replyParsed = FindNodeReply::fromMessage(message);
     if (!replyParsed) { // Failed to parse
-        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+        co_return unexpected(KrpcError::BadReply);
     }
     auto reply = std::move(*replyParsed);
     mRoutingTable.updateNode({reply.id, from}); // This node give us reply, add it to routing table
     env.visited.insert({reply.id, from}); // Mark as visited
-    std::sort(reply.nodes.begin(), reply.nodes.end(), [&](const auto &a, const auto &b) {
-        return a.id.distance(target) < b.id.distance(target);
-    }); // Sort by distance, first is the closest
+    
+    // Sort by distance, first is the closest
+    node_utils::sort(reply.nodes, target);
+    
     if (reply.nodes.empty()) {
-        co_return unexpected(Error::Unknown); // TODO: Return by this error message
+        co_return unexpected(KrpcError::TargetNotFound);
     }
     if (reply.nodes.front().id == target) { // Got the target node
         co_return reply.nodes;
@@ -354,9 +402,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
             }
 
             // Sort it again
-            std::sort(result.begin(), result.end(), [&](const auto &a, const auto &b) {
-                return a.id.distance(target) < b.id.distance(target);
-            });
+            node_utils::sort(result, target);
 
             // Remove the far node
             if (result.size() > KBUCKET_SIZE) {
@@ -376,9 +422,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
         for (auto &[id, ip] : reply.nodes) {
             result.push_back({id, ip});
         }
-        std::sort(result.begin(), result.end(), [&](const auto &a, const auto &b) {
-            return a.id.distance(target) < b.id.distance(target);
-        });
+        node_utils::sort(result, target);
         if (result.size() > KBUCKET_SIZE) {
             result.resize(KBUCKET_SIZE);
         }
@@ -456,7 +500,8 @@ auto DhtSession::allocateTransactionId() -> std::string {
         mTransactionId = 0;
     }
     mTransactionId += 1;
-    return std::string(reinterpret_cast<const char*>(&mTransactionId), sizeof(mTransactionId));
+    auto id = std::bit_cast<std::array<char, sizeof(mTransactionId)> >(mTransactionId);
+    return std::string(id.begin(), id.end());
 }
 
 auto DhtSession::cleanupPeersThread() -> Task<void> { 
