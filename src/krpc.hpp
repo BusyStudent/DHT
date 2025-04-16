@@ -3,14 +3,10 @@
 #include "bencode.hpp"
 #include "nodeid.hpp"
 #include "net.hpp"
+#include "log.hpp"
 #include <cassert>
 #include <optional>
 #include <format>
-
-#ifndef DHT_LOG
-#define DHT_LOG(fmt, ...) fprintf(stderr, "[DHT] %s\n", std::format(fmt, ##__VA_ARGS__).c_str())
-#endif
-
 
 enum class MessageType {
     Query,

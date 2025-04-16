@@ -9,7 +9,7 @@ RoutingTable::~RoutingTable() {
 }
 
 auto RoutingTable::findBucketIndex(const NodeId &id) const -> size_t {
-    size_t distance = mId.distance(id);
+    size_t distance = mId.distanceExp(id);
     return std::clamp<size_t>(distance, 0, 159); // Clamp the distance to the range of the buckets
 }
 
@@ -124,7 +124,7 @@ auto RoutingTable::nextRefresh() const -> std::optional<NodeEndpoint> {
             last = &bucket;
             continue;    
         }
-        if (bucket.lastUpdate > last->lastUpdate) {
+        if (!bucket.nodes.empty() && bucket.lastUpdate > last->lastUpdate) {
             last = &bucket;
         }
     }

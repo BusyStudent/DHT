@@ -43,12 +43,20 @@ public:
     auto toStringView() const -> std::string_view;
 
     /**
+     * @brief Calc the distance with the node (as same as a xor b)
+     * 
+     * @param id 
+     * @return NodeId
+     */
+    auto distance(const NodeId &id) const -> NodeId;
+
+    /**
      * @brief Calc the distance with the node
      * 
      * @param id 
      * @return size_t 0 on self, 160 on max, smaller is closer
      */
-    auto distance(const NodeId &id) const -> size_t;
+    auto distanceExp(const NodeId &id) const -> size_t;
 
     /**
      * @brief Random a node id at distance
@@ -150,34 +158,37 @@ inline auto NodeId::toHex() const -> std::string {
     }
     return buffer;
 }
-inline auto NodeId::distance(const NodeId &id) const -> size_t {
+inline auto NodeId::distance(const NodeId &id) const -> NodeId {
+    return (*this) ^ id;
+}
+inline auto NodeId::distanceExp(const NodeId &id) const -> size_t {
     auto d = (*this) ^ id;
     return 160 - d.clz();
 }
 inline auto NodeId::randWithDistance(size_t distance) const -> NodeId {
-    assert(distance <= 160);
-    NodeId result = *this;
-    
-    std::mt19937 gen(std::random_device{}());
-    std::uniform_int_distribution<uint32_t> dis(0, 255);
+  assert(distance <= 160);
+  NodeId result = *this;
 
-    // Make sure we have enough bits to change
-    size_t remainingBits = distance;
-    for (int i = 19; remainingBits > 0 && i >= 0; i--) {
-        uint8_t mask = 0;
-        uint8_t bits = std::min(size_t(8), remainingBits);
-        
-        // Get the mask
-        for (size_t j = 0; j < bits; j++) {
-            mask |= (1 << j);
-        }
-        
-        // Randomly flip the bits
-        result.mId[i] ^= (dis(gen) & mask);
-        remainingBits -= bits;
+  std::mt19937 gen(std::random_device{}());
+  std::uniform_int_distribution<uint32_t> dis(0, 255);
+
+  // Make sure we have enough bits to change
+  size_t remainingBits = distance;
+  for (int i = 19; remainingBits > 0 && i >= 0; i--) {
+    uint8_t mask = 0;
+    uint8_t bits = std::min(size_t(8), remainingBits);
+
+    // Get the mask
+    for (size_t j = 0; j < bits; j++) {
+      mask |= (1 << j);
     }
-    
-    return result;
+
+    // Randomly flip the bits
+    result.mId[i] ^= (dis(gen) & mask);
+    remainingBits -= bits;
+  }
+
+  return result;
 }
 inline auto NodeId::toStringView() const -> std::string_view {
     return std::string_view(

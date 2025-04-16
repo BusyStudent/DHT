@@ -4,8 +4,8 @@
 
 using namespace std::literals;
 
-inline constexpr auto MAX_DEPTH = 8;
-inline constexpr auto BFS_UNTIL = 2;
+inline constexpr auto MAX_DEPTH = 20;
+inline constexpr auto BFS_UNTIL = 8;
 
 namespace node_utils {
 
@@ -371,7 +371,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
             vec.emplace_back(id, ip);
         }
         else {
-            DHT_LOG("Node {} is far than current closest node {}, distance: {} < {}, depth: {}", id, reply.id, nodeDis, curDis, depth);
+            DHT_LOG("Node {} is far than current closest node {}, distance: {} > {}, depth: {}", id, reply.id, nodeDis, curDis, depth);
         }
     }
     if (vec.empty()) {
@@ -404,11 +404,6 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
             // Sort it again
             node_utils::sort(result, target);
 
-            // Remove the far node
-            if (result.size() > KBUCKET_SIZE) {
-                result.resize(KBUCKET_SIZE);
-            }
-
             // Check the first node is the target
             if (!result.empty() && result.front().id == target) {
                 DHT_LOG("Found target node {}, in depth", target, depth + 1);
@@ -427,19 +422,20 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
             result.resize(KBUCKET_SIZE);
         }
     }
+    else if (result.size() > KBUCKET_SIZE) {
+        result.resize(KBUCKET_SIZE);
+    }
     co_return result;
 }
 
 auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
     DHT_LOG("Bootstrap to {}", nodeIp);
-    std::mt19937_64 gen(std::random_device{}());
-    std::uniform_int_distribution<uint64_t> dis(1, 20);
-    auto res = co_await findNode(NodeId::rand(), nodeIp);
+    auto res = co_await findNode(mId, nodeIp);
     if (!res) {
         DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
         co_return unexpected(res.error());
     }
-    for (size_t i = 1; i < 20; i++) {
+    for (size_t i = 10; i < 150; i += 20) { // Try 10, 40, 60, 80, 100, 120, 140, 150, walkthrough the whole address space
         auto res = co_await findNode(mId.randWithDistance(i));
         if (!res) {
             DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
@@ -506,7 +502,7 @@ auto DhtSession::allocateTransactionId() -> std::string {
 
 auto DhtSession::cleanupPeersThread() -> Task<void> { 
     while (true) {
-        auto res = co_await sleep(15min);
+        auto res = co_await sleep(mCleanupInterval);
         if (!res) {
             DHT_LOG("DhtSession::cleanupPeersThread request quit");
             break;
@@ -518,7 +514,7 @@ auto DhtSession::cleanupPeersThread() -> Task<void> {
 
 auto DhtSession::refreshTableThread() -> Task<void> { 
     while (true) {
-        if (auto res = co_await sleep(1min); !res) {
+        if (auto res = co_await sleep(mRefreshInterval); !res) {
             DHT_LOG("DhtSession::refreshTableThread request quit");
             break;
         }
@@ -549,7 +545,7 @@ auto DhtSession::refreshTableThread() -> Task<void> {
 
 auto DhtSession::randomSearchThread() -> Task<void> { 
     while (true) {
-        if (auto res = co_await sleep(5min); !res) { // Do random search every 5 minutes
+        if (auto res = co_await sleep(mRandomSearchInterval); !res) { // Do random search every 5 minutes
             DHT_LOG("DhtSession::randomSearchThread request quit");
             break;
         }

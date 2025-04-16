@@ -1,5 +1,6 @@
 #include <iostream>
 #include <format>
+#include <ilias/platform/qt_utils.hpp>
 #include <ilias/platform/qt.hpp>
 #include "src/session.hpp"
 #include <QApplication>
@@ -37,23 +38,7 @@ public:
             ui.nodeIdEdit->setText(QString::fromUtf8(text));
         });
 
-        connect(ui.pingButton, &QPushButton::clicked, this, [this]() {
-            ilias_go [this, endpoint = IPEndpoint(ui.pingEdit->text().toStdString().c_str())]() -> Task<> {
-                if (!endpoint.isValid()) {
-                    ui.statusbar->showMessage("Invalid endpoint");
-                    co_return;
-                }
-                auto res = co_await mSession->ping(endpoint);
-                if (!res) {
-                    auto message = std::format("Ping {} failed by {}", endpoint, res.error());
-                    ui.statusbar->showMessage(QString::fromUtf8(message));
-                }
-                else {
-                    auto message = std::format("Ping {} success, peer id {}", endpoint, *res);
-                    ui.statusbar->showMessage(QString::fromUtf8(message));
-                }
-            }; 
-        });
+        connect(ui.pingButton, &QPushButton::clicked, this, &App::onPingButtonClicked);
 
         connect(ui.showBucketsButton, &QPushButton::clicked, this, [this]() {
             // auto tree = ui.treeWidget;
@@ -71,39 +56,9 @@ public:
             // }
         });
 
-        connect(ui.findNodeButton, &QPushButton::clicked, this, [this]() {
-            ilias_go [this, id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str()) ]() -> Task<> {
-                auto res = co_await mSession->findNode(id);
-                if (res) {
-                    for (auto &node : *res) {
-                        auto str = std::format("node {} at {}", node.id, node.ip);
-                        ui.logWidget->addItem(QString::fromUtf8(str));
-                    }
-                }
-            }; 
-        });
+        connect(ui.findNodeButton, &QPushButton::clicked, this, &App::onFindNodeButtonClicked);
 
-        connect(ui.sampleButton, &QPushButton::clicked, this, [this]() {
-            ilias_go [this, endpoint = IPEndpoint(ui.sampleEdit->text().toStdString().c_str())]() -> Task<> {
-                if (!endpoint.isValid()) {
-                    ui.statusbar->showMessage("Invalid endpoint");
-                    co_return;
-                }
-                auto res = co_await mSession->sampleInfoHashes(endpoint);
-                if (!res) {
-                    auto message = std::format("Sample {} failed by {}", endpoint, res.error());
-                    co_return;
-                }
-                if (res->empty()) {
-                    auto message = std::format("No Message sampled from {}", endpoint);
-                    ui.logWidget->addItem("");
-                }
-                for (auto &hash : *res) {
-                    auto message = std::format("Sample {} success, hash {}", endpoint, hash);
-                    ui.logWidget->addItem(QString::fromUtf8(message));
-                }
-            };
-        });
+        connect(ui.sampleButton, &QPushButton::clicked, this, &App::onSampleButtonClicked);
 
 
         connect(ui.dumpButton, &QPushButton::clicked, this, [this]() {
@@ -136,6 +91,59 @@ public:
             setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size()));
         });
         mHandle = spawn(mIo, &DhtSession::run, &*mSession);
+    }
+
+    auto onPingButtonClicked() -> QAsyncSlot<void> {
+        IPEndpoint endpoint(ui.pingEdit->text().toStdString().c_str());
+        if (!endpoint.isValid()) {
+            ui.statusbar->showMessage("Invalid endpoint");
+            co_return;
+        }
+        auto res = co_await mSession->ping(endpoint);
+        if (!res) {
+            auto message = std::format("Ping {} failed by {}", endpoint, res.error());
+            ui.statusbar->showMessage(QString::fromUtf8(message));
+        }
+        else {
+            auto message = std::format("Ping {} success, peer id {}", endpoint, *res);
+            ui.statusbar->showMessage(QString::fromUtf8(message));
+        }
+    }
+
+    auto onFindNodeButtonClicked() -> QAsyncSlot<void> {
+        auto id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str());
+        if (id == NodeId::zero()) {
+            ui.statusbar->showMessage("Invalid node id");
+            co_return;
+        }
+        auto res = co_await mSession->findNode(id);
+        if (res) {
+            for (auto &node : *res) {
+                auto str = std::format("node {} at {}", node.id, node.ip);
+                ui.logWidget->addItem(QString::fromUtf8(str));
+            }
+        }
+    }
+
+    auto onSampleButtonClicked() -> QAsyncSlot<void> {
+        IPEndpoint endpoint(ui.sampleEdit->text().toStdString().c_str());
+        if (!endpoint.isValid()) {
+            ui.statusbar->showMessage("Invalid endpoint");
+            co_return;
+        }
+        auto res = co_await mSession->sampleInfoHashes(endpoint);
+        if (!res) {
+            auto message = std::format("Sample {} failed by {}", endpoint, res.error());
+            co_return;
+        }
+        if (res->empty()) {
+            auto message = std::format("No Message sampled from {}", endpoint);
+            ui.logWidget->addItem("");
+        }
+        for (auto &hash : *res) {
+            auto message = std::format("Sample {} success, hash {}", endpoint, hash);
+            ui.logWidget->addItem(QString::fromUtf8(message));
+        }
     }
 
     ~App() {

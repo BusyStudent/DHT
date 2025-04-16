@@ -96,13 +96,13 @@ TEST(Kad, ID) {
 
     // Self distance is 0
     auto rand = NodeId::rand();
-    ASSERT_EQ(rand.distance(rand), 0);
+    ASSERT_EQ(rand.distanceExp(rand), 0);
 
     // Random distance
     for (int i = 160; i >= 1; i--) {
         auto id = rand.randWithDistance(i);
         // ASSERT_EQ(id.distance(rand), i);
-        std::cout << id.distance(rand) << std::endl;
+        std::cout << id.distanceExp(rand) << std::endl;
     }
 
     // Check a distance b eq b distance a
@@ -157,14 +157,20 @@ TEST(Kad, Route) {
     std::cout << "Search result" << std::endl;
     for (auto &node : nodes) {
         std::cout << node.id.toHex() << std::endl;
-        std::cout << node.id.distance(targetId) << std::endl;
+        std::cout << node.id.distanceExp(targetId) << std::endl;
     }
     auto nodes2 = table.findClosestNodes(id, 20);
     std::cout << "Search result" << std::endl;
     for (auto &node : nodes2) {
         std::cout << node.id.toHex() << std::endl;
-        std::cout << node.id.distance(id) << std::endl;
+        std::cout << node.id.distanceExp(id) << std::endl;
     }
+}
+
+TEST(Kad, Distance) {
+    auto id1 = NodeId::fromHex("0019c6bcd5ebd44b91b768fcd94c5ff8b80dab14");
+    auto id2 = NodeId::fromHex("0000013aa3b5a4def0df03e27646f3b2666a8e85");
+    ASSERT_TRUE(id1 > id2);
 }
 
 int main(int argc, char **argv) {

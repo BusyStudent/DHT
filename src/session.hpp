@@ -168,6 +168,9 @@ private:
     NodeId     mId;
     RoutingTable mRoutingTable;
     std::chrono::milliseconds mTimeout = std::chrono::seconds(2);
+    std::chrono::milliseconds mRefreshInterval = std::chrono::minutes(5); // Refresh the routing table every 5 minute
+    std::chrono::milliseconds mCleanupInterval = std::chrono::minutes(15); // Cleanup the peers every 15 minute
+    std::chrono::milliseconds mRandomSearchInterval = std::chrono::minutes(10);
     std::mt19937 mRandom { std::random_device{}() };
 
     std::map<
