@@ -269,6 +269,8 @@ public:
      */
     static auto decode(std::string_view str) -> BenObject;
 
+    static auto decode(std::span<const std::byte> b) -> BenObject;
+
     static auto decode(const void *buffer, size_t n) -> BenObject;
 
     static auto decodeIn(std::string_view &current) -> BenObject;
@@ -430,6 +432,10 @@ inline auto BenObject::decodeIn(std::string_view &view) -> BenObject {
 
 inline auto BenObject::decode(std::string_view view) -> BenObject {
     return decodeIn(view);
+}
+
+inline auto BenObject::decode(std::span<const std::byte> b) -> BenObject {
+    return decode(b.data(), b.size_bytes());
 }
 
 inline auto BenObject::decode(const void *buffer, size_t n) -> BenObject {

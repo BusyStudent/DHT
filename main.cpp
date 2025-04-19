@@ -2,7 +2,10 @@
 #include <format>
 #include <ilias/platform/qt_utils.hpp>
 #include <ilias/platform/qt.hpp>
+#include "src/metafetcher.hpp"
+#include "src/torrent.hpp"
 #include "src/session.hpp"
+#include "src/bt.hpp"
 #include <QApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -60,12 +63,26 @@ public:
 
         connect(ui.sampleButton, &QPushButton::clicked, this, &App::onSampleButtonClicked);
 
+        // Bt Peer Test part
+        connect(ui.btConnectButton, &QPushButton::clicked, this, &App::onBtConnectButtonClicked);
 
-        connect(ui.dumpButton, &QPushButton::clicked, this, [this]() {
+        connect(ui.dumpRouteTableButton, &QPushButton::clicked, this, [this]() {
             if (!mSession) {
                 return;
             }
             mSession->routingTable().dumpInfo();
+        });
+
+        connect(ui.dumpPeersButton, &QPushButton::clicked, this, [this]() {
+            if (!mSession) {
+                return;
+            }
+            for (const auto &[hash, endpoints] : mSession->peers()) {
+                DHT_LOG("Hash {}", hash);
+                for (const auto &endpoint : endpoints) {
+                    DHT_LOG("  {}", endpoint);
+                }
+            }
         });
 
         // Try Load config
@@ -76,6 +93,8 @@ public:
         auto json = QJsonDocument::fromJson(file.readAll()).object();
         ui.bindEdit->setText(json["ip"].toString());
         ui.nodeIdEdit->setText(json["id"].toString());
+        ui.btIpEdit->setText(json["bt_ip"].toString());
+        ui.btHashEdit->setText(json["bt_hash"].toString());
     }
 
     auto start() -> void {
@@ -144,6 +163,30 @@ public:
             auto message = std::format("Sample {} success, hash {}", endpoint, hash);
             ui.logWidget->addItem(QString::fromUtf8(message));
         }
+    }
+
+    auto onBtConnectButtonClicked() -> QAsyncSlot<void> {
+        ui.statusbar->clearMessage();
+        auto endpoint = IPEndpoint(ui.btIpEdit->text().toStdString().c_str());
+        auto infoHash = InfoHash::fromHex(ui.btHashEdit->text().toStdString().c_str());
+        if (!endpoint.isValid() || infoHash == InfoHash::zero()) {
+            ui.statusbar->showMessage("Invalid endpoint or hash");
+            co_return;
+        }
+        BT_LOG("Start connect to {}", endpoint);
+        TcpClient client = (co_await TcpClient::make(endpoint.family())).value();
+        if (!co_await client.connect(endpoint)) {
+            ui.statusbar->showMessage("Failed to connect bt peer");
+            co_return;
+        }
+        MetadataFetcher fetcher { std::move(client), infoHash };
+        auto res = co_await fetcher.fetch();
+        if (!res) {
+            ui.statusbar->showMessage("Failed to fetch metadata");
+            co_return;
+        }
+        auto torrent = Torrent::parse(*res);
+        BT_LOG("Got torrent {}", torrent);
     }
 
     ~App() {

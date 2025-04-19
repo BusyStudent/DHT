@@ -177,9 +177,16 @@
             </layout>
            </item>
            <item>
-            <widget class="QPushButton" name="dumpButton">
+            <widget class="QPushButton" name="dumpRouteTableButton">
              <property name="text">
               <string>Dump RouteTable</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="dumpPeersButton">
+             <property name="text">
+              <string>Dump Peers Anounced</string>
              </property>
             </widget>
            </item>
@@ -266,6 +273,73 @@
          <widget class="QListWidget" name="infoHashWidget"/>
         </item>
        </layout>
+      </widget>
+      <widget class="QWidget" name="tab_4">
+       <attribute name="title">
+        <string>Bt Peer Test</string>
+       </attribute>
+       <widget class="QPushButton" name="btConnectButton">
+        <property name="geometry">
+         <rect>
+          <x>760</x>
+          <y>20</y>
+          <width>75</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Connect</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="btIpEdit">
+        <property name="geometry">
+         <rect>
+          <x>160</x>
+          <y>20</y>
+          <width>113</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="btHashEdit">
+        <property name="geometry">
+         <rect>
+          <x>540</x>
+          <y>20</y>
+          <width>113</width>
+          <height>20</height>
+         </rect>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_5">
+        <property name="geometry">
+         <rect>
+          <x>60</x>
+          <y>20</y>
+          <width>54</width>
+          <height>12</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Ip:</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_7">
+        <property name="geometry">
+         <rect>
+          <x>433</x>
+          <y>20</y>
+          <width>81</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>InfoHash:</string>
+        </property>
+       </widget>
       </widget>
      </widget>
     </item>

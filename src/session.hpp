@@ -57,6 +57,13 @@ public:
     auto routingTable() -> RoutingTable &;
 
     /**
+     * @brief Get the peers that announced
+     * 
+     * @return const std::map<InfoHash, std::set<IPEndpoint> >& 
+     */
+    auto peers() const -> const std::map<InfoHash, std::set<IPEndpoint> > &;
+
+    /**
      * @brief Set the callback triggered when a peer is announced
      * 
      * @param callback 

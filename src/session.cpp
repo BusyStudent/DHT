@@ -283,7 +283,11 @@ auto DhtSession::routingTable() const -> const RoutingTable & {
 
 auto DhtSession::routingTable() -> RoutingTable & {
     return mRoutingTable;
-}  
+}
+
+auto DhtSession::peers() const -> const std::map<InfoHash, std::set<IPEndpoint>> & {
+    return mPeers;
+}
 
 auto DhtSession::setOnAnouncePeer(
     std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback)
