@@ -1,4 +1,5 @@
 #include "torrent.hpp"
+#include "log.hpp"
 #include "sha1.h"
 
 auto Torrent::name() const -> std::string {
@@ -54,8 +55,12 @@ auto Torrent::infoHash() const -> InfoHash {
     return InfoHash::from(sha1, sizeof(sha1));
 }
 
+auto Torrent::encode() const -> std::string {
+    return mDict.encode();
+}
+
 auto Torrent::fromObject(BenObject object) -> Torrent {
-    if (object["info"].isDict()) {  // As same as raw torrent
+    if (object.hasKey("info") && object["info"].isDict()) {  // As same as raw torrent
         Torrent t;
         t.mDict = std::move(object);
         return t;

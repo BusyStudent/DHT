@@ -99,6 +99,6 @@ auto MetadataFetcher::fetch() -> IoTask<std::vector<std::byte> > {
     }
 
     // Try to decode the metadata
-    BT_LOG("Metadata: {}", BenObject::decode(metadata.data(), metadata.size()));
+    // BT_LOG("Metadata: {}", BenObject::decode(metadata.data(), metadata.size()));
     co_return metadata;
 }

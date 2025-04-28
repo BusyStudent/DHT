@@ -3,6 +3,7 @@
 #include <ilias/platform/qt_utils.hpp>
 #include <ilias/platform/qt.hpp>
 #include "src/metafetcher.hpp"
+#include "src/fetchmanager.hpp"
 #include "src/torrent.hpp"
 #include "src/session.hpp"
 #include "src/bt.hpp"
@@ -13,6 +14,7 @@
 #include <QJsonArray>
 #include <QStatusBar>
 #include <QFile>
+#include <QDir>
 #include <optional>
 #include "ui_main.h"
 
@@ -26,6 +28,9 @@ class App final : public QMainWindow {
 public:
     App() {
         ui.setupUi(this);
+        mFetchManager.setOnFetched([this](InfoHash hash, std::vector<std::byte> data) {
+            onMetadataFetched(hash, std::move(data));
+        });
 
         connect(ui.startButton, &QPushButton::clicked, this, [this]() {
             ui.bindEdit->setDisabled(true);
@@ -86,6 +91,10 @@ public:
             }
         });
 
+        if (!QDir("./torrents").exists()) {
+            QDir("./").mkdir("torrents");
+        }
+
         // Try Load config
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
@@ -105,8 +114,9 @@ public:
         auto nodeId = idText.isEmpty() ? NodeId::rand() : NodeId::fromHex(idText.toStdString().c_str());
         // Make session and start it
         mSession.emplace(mIo, nodeId, endpoint.value());
-        mSession->setOnAnouncePeer([this](const InfoHash &hash, const IPEndpoint &) {
+        mSession->setOnAnouncePeer([this](const InfoHash &hash, const IPEndpoint &endpoint) {
             onHashFound(hash);
+            mFetchManager.addHash(hash, endpoint);
         });
         mSession->routingTable().setOnNodeChanged([&, this]() {
             setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size()));
@@ -181,6 +191,7 @@ public:
             ui.statusbar->showMessage("Invalid endpoint or hash");
             co_return;
         }
+#if 0
         BT_LOG("Start connect to {}", endpoint);
         TcpClient client = (co_await TcpClient::make(endpoint.family())).value();
         if (!co_await client.connect(endpoint)) {
@@ -200,6 +211,32 @@ public:
         card->setTorrent(torrent);
         card->setAttribute(Qt::WA_DeleteOnClose);
         card->show();
+#else
+        mFetchManager.addHash(infoHash, endpoint);
+#endif
+    }
+
+    auto onMetadataFetched(InfoHash hash, std::vector<std::byte> data) -> void {
+        auto torrent = Torrent::parse(data);
+        BT_LOG("Got torrent {}", hash);
+        // To Show a popup?
+        auto card = new TorrentCard;
+        card->setTorrent(torrent);
+        card->setAttribute(Qt::WA_DeleteOnClose);
+        card->show();
+
+        // Try save to file
+        auto fileName = QString::fromStdString(hash.toHex()) + ".torrent";
+        QFile file("./torrents/" + fileName);
+        if (file.open(QIODevice::WriteOnly)) {
+            auto encoded = torrent.encode();
+            file.write(reinterpret_cast<const char *>(encoded.data()), encoded.size());
+            file.close();
+            ui.statusbar->showMessage(QString("Saved torrent to %1").arg(fileName), 5);
+        }
+        else {
+            ui.statusbar->showMessage(QString("Failed to save torrent to %1").arg(fileName), 5);
+        }
     }
 
     ~App() {
@@ -226,6 +263,7 @@ private:
     WaitHandle<> mHandle;
 
     std::set<InfoHash> mHashs;
+    FetchManager mFetchManager;
 };
 
 int main(int argc, char **argv) {

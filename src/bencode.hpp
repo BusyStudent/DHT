@@ -192,6 +192,18 @@ public:
     }
 
     /**
+     * @brief Check the dict has the key
+     * 
+     * @param str 
+     * @return true 
+     * @return false 
+     */
+    auto hasKey(std::string_view str) -> bool {
+        auto &dict = std::get<Dict>(mData);
+        return dict.find(str) != dict.end();
+    }
+
+    /**
      * @brief Encode the object to string
      * 
      * @return std::string 

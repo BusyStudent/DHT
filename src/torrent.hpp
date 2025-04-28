@@ -39,6 +39,7 @@ public:
     auto files() const -> std::vector<File>;
     auto pieces() const -> std::span<const std::byte>;
     auto infoHash() const -> InfoHash;
+    auto encode() const -> std::string;
 
     static auto fromObject(BenObject object) -> Torrent;
     static auto parse(std::span<const std::byte> buffer) -> Torrent;
