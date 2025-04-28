@@ -8,6 +8,7 @@
 #include <span>
 #include <bit>
 #include "sha1.h"
+#include "net.hpp"
 
 // NOTE: in (self ^ node).clz() is bigger, the node is more closer to the self
 
@@ -137,6 +138,13 @@ public:
     static auto fromHex(const char (&hexString)[N]) -> NodeId;
 private:
     std::array<uint8_t, 20> mId;
+};
+
+struct NodeEndpoint {
+    NodeId id;
+    IPEndpoint ip;
+
+    auto operator <=>(const NodeEndpoint &) const noexcept = default;
 };
 
 using InfoHash = NodeId; // In Bittorrent

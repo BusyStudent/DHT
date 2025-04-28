@@ -24,6 +24,19 @@ public:
      */
     auto run() -> Task<void>;
 
+    /**
+     * @brief Save the routing table to the file
+     * 
+     * @param file 
+     */
+    auto saveFile(const char *file) const -> void;
+
+    /**
+     * @brief Load the routing table fromt the file
+     * 
+     * @param file 
+     */
+    auto loadFile(const char *file) -> void;
 
     /**
      * @brief Try to find the node by target
@@ -69,6 +82,13 @@ public:
      * @param callback 
      */
     auto setOnAnouncePeer(std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback) -> void;
+
+    /**
+     * @brief Set the Skip Bootstrap object
+     * 
+     * @param skip Skip the bootstrap?
+     */
+    auto setSkipBootstrap(bool skip) -> void;
 
     /**
      * @brief Get the sample info hashes from the routing table

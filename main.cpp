@@ -6,6 +6,7 @@
 #include "src/torrent.hpp"
 #include "src/session.hpp"
 #include "src/bt.hpp"
+#include "ui/torrent_card.hpp"
 #include <QApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -95,6 +96,7 @@ public:
         ui.nodeIdEdit->setText(json["id"].toString());
         ui.btIpEdit->setText(json["bt_ip"].toString());
         ui.btHashEdit->setText(json["bt_hash"].toString());
+        ui.saveSessionBox->setChecked(json["save_session"].toBool());
     }
 
     auto start() -> void {
@@ -109,6 +111,12 @@ public:
         mSession->routingTable().setOnNodeChanged([&, this]() {
             setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size()));
         });
+        if (ui.saveSessionBox->isChecked()) {
+            mSession->loadFile("session.cache");
+        }
+        if (ui.skipBootstrapBox->isChecked()) {
+            mSession->setSkipBootstrap(true);
+        }
         mHandle = spawn(mIo, &DhtSession::run, &*mSession);
     }
 
@@ -187,12 +195,20 @@ public:
         }
         auto torrent = Torrent::parse(*res);
         BT_LOG("Got torrent {}", torrent);
+        // To Show a popup?
+        auto card = new TorrentCard;
+        card->setTorrent(torrent);
+        card->setAttribute(Qt::WA_DeleteOnClose);
+        card->show();
     }
 
     ~App() {
         if (mHandle) {
             mHandle.cancel();
             mHandle.wait();
+        }
+        if (mSession && ui.saveSessionBox->isEnabled()) {
+            mSession->saveFile("session.cache");
         }
     }
 

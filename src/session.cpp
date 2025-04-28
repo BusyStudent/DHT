@@ -31,6 +31,7 @@ DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, const IPEndpoint &addr
 {
     mClient.setOption(sockopt::ReuseAddress(true)).value();
     mClient.bind(addr).value();
+    mScope.spawn(&DhtSession::processInput, this);
 }
 
 DhtSession::~DhtSession() {
@@ -39,7 +40,6 @@ DhtSession::~DhtSession() {
 }
 
 auto DhtSession::run() -> Task<void> { 
-    auto handle = mScope.spawn(&DhtSession::processInput, this);
     const auto bootstrapNodes = {
         std::pair{"router.bittorrent.com", "6881"},
         std::pair{"dht.transmissionbt.com", "6881"},
@@ -53,6 +53,7 @@ auto DhtSession::run() -> Task<void> {
             };
             auto info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
             if (!info) {
+                DHT_LOG("Failed to get the addrinfo of {}:{} => {}", host, port, info.error());
                 continue;
             }
             for (auto &endpoint : info->endpoints()) {
@@ -77,6 +78,45 @@ auto DhtSession::run() -> Task<void> {
     // Join the scope
     co_await mScope;
     co_return;
+}
+
+auto DhtSession::saveFile(const char *file) const -> void {
+    auto fp = ::fopen(file, "w");
+    if (!fp) {
+        return;
+    }
+    for (auto &[id, ip] : mRoutingTable.nodes()) {
+        ::fprintf(fp, "%s-%s\n", id.toHex().c_str(), ip.toString().c_str());
+    }
+    ::fclose(fp);
+}
+
+auto DhtSession::loadFile(const char *file) -> void {
+    auto fp = ::fopen(file, "r");
+    if (!fp) {
+        return;
+    }
+    char buffer[256] {0};
+    while (::fgets(buffer, sizeof(buffer), fp)) {
+        auto line = std::string_view(buffer);
+        auto dash = line.find('-');
+        if (dash == std::string_view::npos) {
+            continue;
+        }
+        auto id = NodeId::fromHex(line.substr(0, dash));
+        auto ip = IPEndpoint::fromString(line.substr(dash + 1));
+        if (ip && id != NodeId::zero()) {
+            // Spawn task to ping it
+            mScope.spawn([this, id, ip]() -> Task<void> {
+                auto res = co_await ping(*ip);
+                if (res == id) { // Same id, got it
+                    mRoutingTable.updateNode({id, *ip});
+                }
+            });
+        }
+        ::memset(buffer, 0, sizeof(buffer));
+    }
+    ::fclose(fp);
 }
 
 auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> IoTask<void> {
@@ -292,7 +332,11 @@ auto DhtSession::peers() const -> const std::map<InfoHash, std::set<IPEndpoint>>
 auto DhtSession::setOnAnouncePeer(
     std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback)
     -> void {
-  mOnAnnouncePeer = std::move(callback);
+    mOnAnnouncePeer = std::move(callback);
+}
+
+auto DhtSession::setSkipBootstrap(bool skip) -> void {
+    mSkipBootstrap = skip;
 }
 
 auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp)

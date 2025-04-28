@@ -94,7 +94,7 @@ auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::
         }
     }
 #else
-    std::vector<std::pair<size_t, NodeEndpoint>> collected;
+    std::vector<std::pair<NodeId, NodeEndpoint> > collected;
     for (auto &bucket : mBuckets) {
         for (auto &node : bucket.nodes) {
             collected.emplace_back(node.endpoint.id.distance(id), node.endpoint);
@@ -178,6 +178,16 @@ auto RoutingTable::dumpInfo() const -> void {
     ::fflush(stderr);
 #endif
 
+}
+
+auto RoutingTable::nodes() const -> std::vector<NodeEndpoint> {
+    std::vector<NodeEndpoint> nodes;
+    for (auto &bucket : mBuckets) {
+        for (auto &n : bucket.nodes) {
+            nodes.emplace_back(n.endpoint);
+        }
+    }
+    return nodes;
 }
 
 auto RoutingTable::size() const -> size_t {

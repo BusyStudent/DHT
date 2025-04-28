@@ -5,12 +5,17 @@ auto Torrent::name() const -> std::string {
     return mDict["info"]["name"].toString();
 }
 
-auto Torrent::length() const -> std::optional<size_t> {
+auto Torrent::length() const -> size_t {
     auto len = mDict["info"]["length"];
     if (len.isInt()) {
         return len.toInt();
     }
-    return std::nullopt;
+    // is Multi
+    size_t num = 0;
+    for (const auto &f : files()) {
+        num += f.length;
+    }
+    return num;
 }
 
 auto Torrent::hasMultiFiles() const -> bool { 
@@ -35,7 +40,7 @@ auto Torrent::files() const -> std::vector<File> {
         std::vector<std::string> path;
         path.emplace_back(name());
         files.emplace_back(
-            length().value(),
+            length(),
             std::move(path)
         );
     }

@@ -85,6 +85,13 @@ public:
      * 
      */
     auto dumpInfo() const -> void;
+    
+    /**
+     * @brief Get the node in the routing table
+     * 
+     * @return std::vector<NodeEndpoint> 
+     */
+    auto nodes() const -> std::vector<NodeEndpoint>;
 
     /**
      * @brief The size of the node in the routing table

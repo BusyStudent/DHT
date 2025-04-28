@@ -34,7 +34,7 @@ public:
      * @return std::string 
      */
     auto name() const -> std::string;
-    auto length() const -> std::optional<size_t>;
+    auto length() const -> size_t;
     auto hasMultiFiles() const -> bool;
     auto files() const -> std::vector<File>;
     auto pieces() const -> std::span<const std::byte>;
@@ -77,10 +77,9 @@ struct std::formatter<Torrent> {
             text += "]]";
         }
         else {
-            auto length = torrent.length();
             text = std::format("Torrent[name={}, length={}]", 
                 torrent.name(),
-                length.value_or(0)
+                torrent.length()
             );
         }
         return std::format_to(ctxt.out(), "{}", text);

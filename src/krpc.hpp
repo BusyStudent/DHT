@@ -14,12 +14,6 @@ enum class MessageType {
     Error,
     Unknown,
 };
-struct NodeEndpoint {
-    NodeId id;
-    IPEndpoint ip;
-
-    auto operator <=>(const NodeEndpoint &) const noexcept = default;
-};
 
 template <typename T>
 inline auto toCharArray(const T &t) -> std::array<char, sizeof(T)> {
