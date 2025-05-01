@@ -3,7 +3,7 @@ add_rules("plugin.compile_commands.autoupdate", {lsp = "cpptools", outputdir = "
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 add_requires("gtest", "ilias")
 
-set_languages("c++23")
+set_languages("c++20")
 
 target("main")
     add_rules("qt.widgetapp")
@@ -12,7 +12,10 @@ target("main")
     add_files("main.cpp")
     add_files("libutp/*.cpp")
     add_files("ui/*")
+    add_files("ui/widgets/*.cpp")
+    add_files("ui/widgets/*.hpp")
     add_packages("ilias")
+
 target("test")
     set_default(false)
     add_packages("gtest", "ilias")
