@@ -31,7 +31,7 @@ auto MetadataFetcher::fetch() -> IoTask<std::vector<std::byte> > {
     BT_LOG("Metadata size: {}, pieces: {}", metadataSize, pieces);
     for (size_t i = 0; i < pieces; i++) {
         auto message = BenObject::makeDict();
-        message["msg_type"] = size_t(0);
+        message["msg_type"] = int64_t(0);
         message["piece"] = i;
         if (auto res = co_await mClient.sendMessageExt(*mClient.metadataId(), message); !res) {
             co_return unexpected(res.error());

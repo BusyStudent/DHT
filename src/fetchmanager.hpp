@@ -28,6 +28,13 @@ public:
      * @param fn 
      */
     auto setOnFetched(std::function<void (InfoHash hash, std::vector<std::byte> data)>  fn) -> void;
+
+    /**
+     * @brief mark the hash as fetched
+     * 
+     * @param hash 
+     */
+    auto markFetched(InfoHash hash) -> void;
 private:
     auto doFetch(InfoHash hash) -> Task<void>;
 
@@ -37,6 +44,7 @@ private:
     > mPending; //< The pending hashs we are fetching
 
     std::set<InfoHash> mFetched; //< The hashs we have fetched
+    std::set<InfoHash> mWorkers; // < The hashs we are working on
     TaskScope mScope;
 
     size_t mMaxCocurrent = 5;

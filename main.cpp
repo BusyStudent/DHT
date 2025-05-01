@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <iostream>
 #include <format>
 #include <ilias/platform/qt_utils.hpp>
@@ -28,9 +29,23 @@ class App final : public QMainWindow {
 public:
     App() {
         ui.setupUi(this);
+
+        // Prepare fetcher
         mFetchManager.setOnFetched([this](InfoHash hash, std::vector<std::byte> data) {
             onMetadataFetched(hash, std::move(data));
         });
+        // if (!QDir("./torrents").exists()) {
+        //     QDir("./").mkdir("torrents");
+        // }
+        if (!std::filesystem::exists("./torrents")) {
+            std::filesystem::create_directory("./torrents");
+        }
+        for (auto &entry : std::filesystem::directory_iterator("./torrents")) {
+            if (auto path = entry.path(); path.extension() == ".torrent") {
+                mFetchManager.markFetched(InfoHash::fromHex(path.stem().string()));
+            }
+        }
+
 
         connect(ui.startButton, &QPushButton::clicked, this, [this]() {
             ui.bindEdit->setDisabled(true);
@@ -90,10 +105,6 @@ public:
                 }
             }
         });
-
-        if (!QDir("./torrents").exists()) {
-            QDir("./").mkdir("torrents");
-        }
 
         // Try Load config
         QFile file("config.json");

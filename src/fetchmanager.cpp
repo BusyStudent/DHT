@@ -10,15 +10,16 @@ FetchManager::~FetchManager() {
 
 auto FetchManager::addHash(const InfoHash& hash, const IPEndpoint& endpoint)
     -> void {
-  if (mFetched.contains(hash)) {
-    return;
-  }
-  mPending[hash].insert(endpoint);
-  // Add the fetching task into it
-  if (mScope.runningTasks() < mMaxCocurrent && mPending.size() > 0) {
-    // Spawn a new worker to fetch the first hash
-    mScope.spawn(doFetch(hash));
-  }
+    if (mFetched.contains(hash)) {
+        return;
+    }
+    mPending[hash].insert(endpoint);
+    // Add the fetching task into it
+    if (mScope.runningTasks() < mMaxCocurrent && mPending.size() > 0 && !mWorkers.contains(hash)) {
+        // Spawn a new worker to fetch the first hash
+        mScope.spawn(doFetch(hash));
+        mWorkers.insert(hash);
+    }
 }
 
 auto FetchManager::setOnFetched(
@@ -26,6 +27,13 @@ auto FetchManager::setOnFetched(
     -> void 
 {
     mOnFetched = std::move(fn);
+}
+
+auto FetchManager::markFetched(InfoHash hash) -> void {
+    mFetched.insert(hash);
+    mPending.erase(hash); // Remove the hash from pending
+    mWorkers.erase(hash); // Remove the hash from workers
+    BT_LOG("Hash {} marked as fetched", hash);
 }
 
 auto FetchManager::doFetch(InfoHash hash) -> Task<void> {
@@ -49,25 +57,26 @@ auto FetchManager::doFetch(InfoHash hash) -> Task<void> {
         if (auto meta = co_await fetcher.fetch(); !meta) {
             BT_LOG("Failed to fetch metadata: {}", meta.error());
             continue;
-        } 
+        }
         else {
             BT_LOG("Got metadata from hash {} :", hash, endpoint);
             mFetched.insert(hash);
             mPending.erase(hash);  // We are done with this hash
 
-            if (mOnFetched) {
-                mOnFetched(hash, std::move(*meta));
-            }
+        if (mOnFetched) {
+            mOnFetched(hash, std::move(*meta));
+        }
             break;
         }
     }
     mPending.erase(hash);
+    mWorkers.erase(hash);
 
     if (!self.cancellationToken().isCancellationRequested()) {
         // No in cancel state?
         if (mScope.runningTasks() < mMaxCocurrent && mPending.size() > 0) {
-            // Spawn a new worker to fetch the first hash
-            mScope.spawn(doFetch(mPending.begin()->first));
+        // Spawn a new worker to fetch the first hash
+        mScope.spawn(doFetch(mPending.begin()->first));
         }
     }
     BT_LOG("Fetch worker quit, {} left", mScope.runningTasks() - 1);
