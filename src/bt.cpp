@@ -3,7 +3,7 @@
 #include "bt.hpp"
 
 // TODO: Replace the Error::Unknown with our own error
-BtClient::BtClient(TcpClient c) : mClient(std::move(c)) {
+BtClient::BtClient(DynStreamClient c) : mClient(std::move(c)) {
 
 }
 

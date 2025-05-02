@@ -9,6 +9,7 @@
  * 
  */
 #pragma once
+#include <ilias/io/dyn_traits.hpp>
 #include "bencode.hpp"
 #include "nodeid.hpp"
 #include "net.hpp"
@@ -53,7 +54,7 @@ static_assert(sizeof(BtHandshakeMessage) == 68);
  */
 class BtClient {
 public:
-    BtClient(TcpClient client);
+    BtClient(DynStreamClient client);
 
     static constexpr int MetadataExtId = 0x1; // The metadata extension id in our side we used
     static constexpr int PexExtId = 0x2; // The pex extension id in our side we used
@@ -170,7 +171,7 @@ public:
         return std::nullopt;
     }
 private:
-    TcpClient mClient;
+    DynStreamClient mClient;
     PeerId mRemotePeerId;
     BenObject mRemoteExtension;
 

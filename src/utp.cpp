@@ -1,5 +1,6 @@
 #include <ilias/io/stream.hpp>
 #include "utp.hpp"
+#include "log.hpp"
 
 using namespace std::chrono_literals;
 
@@ -95,11 +96,13 @@ UtpContext::UtpContext(UdpClient &client) : mClient(client) {
         auto sock = UtpClientImpl::from(args->socket);
         auto buffer = makeBuffer(args->buf, args->len);
         sock->readable(buffer);
+        UTP_LOG("num {} readable", buffer.size());
         return 0;
     });
     utp_set_callback(mCtxt, UTP_ON_CONNECT, [](utp_callback_arguments *args) -> uint64 {
         auto self = static_cast<UtpContext *>(utp_context_get_userdata(args->context));
         auto sock = UtpClientImpl::from(args->socket);
+        UTP_LOG("Connected done");
         sock->connected();
         return 0;
     });
@@ -111,6 +114,7 @@ UtpContext::UtpContext(UdpClient &client) : mClient(client) {
     });
     mScope.spawn([this]() -> Task<void> {
         while (co_await sleep(500ms)) {
+            UTP_LOG("Check timeouts");
             utp_check_timeouts(mCtxt);
             utp_issue_deferred_acks(mCtxt);
         }
@@ -131,6 +135,7 @@ auto UtpContext::processUdp(std::span<const std::byte> buffer, const IPEndpoint 
 }
 
 auto UtpContext::onSendto(std::pmr::vector<std::byte> buffer, IPEndpoint target) -> Task<void> {
+    UTP_LOG("Send data to {}", target);
     co_await mClient.sendto(buffer, target);
 }
 
@@ -195,6 +200,14 @@ auto UtpClient::read(std::span<std::byte> buffer) -> IoTask<size_t> {
         }
         co_return left;
     }
+}
+
+auto UtpClient::shutdown() -> IoTask<void> {
+    if (!mImpl || !mImpl->sock) {
+        co_return unexpected(Error::InvalidArgument);
+    }
+    utp_shutdown(mImpl->sock, Shutdown::Both);
+    co_return {};
 }
 
 auto UtpClient::connect(const IPEndpoint &endpoint) -> IoTask<void> {

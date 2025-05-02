@@ -35,12 +35,18 @@ class UtpClient {
 public:
     UtpClient() = default;
     UtpClient(UtpContext &session);
+    UtpClient(const UtpClient &) = default;
+    UtpClient(UtpClient &&) = default;
     ~UtpClient();
 
     auto connect(const IPEndpoint &endpoint) -> IoTask<void>;
     auto write(std::span<const std::byte>) -> IoTask<size_t>;
     auto read(std::span<std::byte>) -> IoTask<size_t>;
+    auto shutdown() -> IoTask<void>;
     auto remoteEndpoint() const -> Result<IPEndpoint>;
+
+    auto operator =(const UtpClient &) -> UtpClient & = default;
+    auto operator =(UtpClient &&) -> UtpClient & = default;
 private:
     std::shared_ptr<UtpClientImpl> mImpl;
 };

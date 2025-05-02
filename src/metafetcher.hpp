@@ -20,7 +20,7 @@ class MetadataFetcher {
 public:
     static constexpr size_t ChunkSize = 16384; // 16KB
     
-    MetadataFetcher(TcpClient client, const InfoHash &hash) : mClient(std::move(client)), mHash(hash) {
+    MetadataFetcher(DynStreamClient client, const InfoHash &hash) : mClient(std::move(client)), mHash(hash) {
         // Do nothing
     }
 

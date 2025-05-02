@@ -138,9 +138,11 @@ public:
         mUdp = UdpClient(mIo, endpoint->family());
         mUdp.setOption(sockopt::ReuseAddress(true));
         mUdp.bind(*endpoint).value();
+        mScope.spawn(&App::processUdp, this);
 
         mUtp.emplace(mUdp);
-
+        mFetchManager.setUtpContext(*mUtp);
+#if 1
         mSession.emplace(mIo, nodeId, mUdp);
         mSession->setOnAnouncePeer([this](const InfoHash &hash, const IPEndpoint &endpoint) {
             onHashFound(hash);
@@ -154,20 +156,19 @@ public:
         if (ui.skipBootstrapBox->isChecked()) {
             mSession->setSkipBootstrap(true);
         }
-
-        mScope.spawn(&App::processUdp, this);
         mScope.spawn(&DhtSession::start, &*mSession);
+#endif
     }
 
     auto processUdp() -> Task<void> {
-        DHT_LOG("App::processUdp start");
+        APP_LOG("App::processUdp start");
         std::byte buffer[65535];
         IPEndpoint endpoint;
         while (true) {
             auto res = co_await mUdp.recvfrom(buffer, endpoint);
             if (!res) {
                 if (res.error() != Error::Canceled) {
-                    DHT_LOG("App::processUdp recvfrom failed: {}", res.error());
+                    APP_LOG("App::processUdp recvfrom failed: {}", res.error());
                 }
                 break;
             }
@@ -175,9 +176,11 @@ public:
             if (mUtp->processUdp(data, endpoint)) { // Valid UTP packet
                 continue;
             }
-            co_await mSession->processUdp(data, endpoint);
+            else if (mSession) {
+                co_await mSession->processUdp(data, endpoint);
+            }
         }
-        DHT_LOG("App::processUdp quit");
+        APP_LOG("App::processUdp quit");
     }
 
     auto onPingButtonClicked() -> QAsyncSlot<void> {
@@ -263,7 +266,7 @@ public:
             co_return;
         }
 #if 0
-        BT_LOG("Start connect to {}", endpoint);
+        APP_LOG("Start connect to {}", endpoint);
         TcpClient client = (co_await TcpClient::make(endpoint.family())).value();
         if (!co_await client.connect(endpoint)) {
             ui.statusbar->showMessage("Failed to connect bt peer");
@@ -276,7 +279,7 @@ public:
             co_return;
         }
         auto torrent = Torrent::parse(*res);
-        BT_LOG("Got torrent {}", torrent);
+        APP_LOG("Got torrent {}", torrent);
         // To Show a popup?
         auto card = new TorrentCard;
         card->setTorrent(torrent);
@@ -289,7 +292,7 @@ public:
 
     auto onMetadataFetched(InfoHash hash, std::vector<std::byte> data) -> void {
         auto torrent = Torrent::parse(data);
-        BT_LOG("Got torrent {}", hash);
+        APP_LOG("Got torrent {}", hash);
         auto items = ui.infoHashWidget->findItems(QString::fromStdString(hash.toHex()), Qt::MatchFixedString);
         for (auto item : items) {
             item->setText(QString::fromUtf8(torrent.name()));

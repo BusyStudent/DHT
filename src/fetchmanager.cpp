@@ -36,6 +36,10 @@ auto FetchManager::markFetched(InfoHash hash) -> void {
     BT_LOG("Hash {} marked as fetched", hash);
 }
 
+auto FetchManager::setUtpContext(UtpContext &utp) -> void {
+    mUtp = &utp;
+}
+
 auto FetchManager::doFetch(InfoHash hash) -> Task<void> {
     auto self = co_await currentTask();
     while (!mPending[hash].empty()) {
@@ -43,17 +47,30 @@ auto FetchManager::doFetch(InfoHash hash) -> Task<void> {
         auto endpoint = *mPending[hash].begin();
         mPending[hash].erase(endpoint);
 
-        auto client = co_await TcpClient::make(endpoint.family());
-        if (!client) {
-            BT_LOG("Failed to build client: {}", client.error());
-            continue;
-        }
         BT_LOG("Worker connect to {}", endpoint);
-        if (auto res = co_await client->connect(endpoint); !res) {
-            BT_LOG("Failed to connect to {}: {}", endpoint, res.error());
-            continue;
+        DynStreamClient client;
+        if (mUtp) { // Try UTP First
+            if (auto res = co_await utpConnect(endpoint); res) {
+                client = std::move(*res);
+            }
         }
-        MetadataFetcher fetcher{std::move(*client), hash};
+#if 1
+        if (!client) { // Try TCP
+            if (auto res = co_await tcpConnect(endpoint); res) {
+                client = std::move(*res);
+            }
+            else {
+                BT_LOG("Failed to connect to {}: {}", endpoint, res.error());
+                continue; // Try next endpoint
+            }
+        }
+#else
+        if (!client) {
+            continue; // Try next endpoint
+        }
+#endif
+
+        MetadataFetcher fetcher{std::move(client), hash};
         if (auto meta = co_await fetcher.fetch(); !meta) {
             BT_LOG("Failed to fetch metadata: {}", meta.error());
             continue;
@@ -75,9 +92,31 @@ auto FetchManager::doFetch(InfoHash hash) -> Task<void> {
     if (!self.cancellationToken().isCancellationRequested()) {
         // No in cancel state?
         if (mScope.runningTasks() < mMaxCocurrent && mPending.size() > 0) {
-        // Spawn a new worker to fetch the first hash
-        mScope.spawn(doFetch(mPending.begin()->first));
+            // Spawn a new worker to fetch the first hash
+            mScope.spawn(doFetch(mPending.begin()->first));
         }
     }
     BT_LOG("Fetch worker quit, {} left", mScope.runningTasks() - 1);
+}
+
+auto FetchManager::tcpConnect(const IPEndpoint &endpoint) -> IoTask<TcpClient> {
+    auto client = co_await TcpClient::make(endpoint.family());
+    if (!client) {
+        BT_LOG("Failed to build client: {}", client.error());
+        co_return unexpected(client.error());
+    }
+    if (auto res = co_await client->connect(endpoint); !res) {
+        BT_LOG("Failed to tcp connect to {}: {}", endpoint, res.error());
+        co_return unexpected(res.error());
+    }
+    co_return std::move(*client);
+}
+
+auto FetchManager::utpConnect(const IPEndpoint &endpoint) -> IoTask<UtpClient> {
+    UtpClient client {*mUtp};
+    if (auto res = co_await client.connect(endpoint); !res) {
+        BT_LOG("Failed to utp connect to {}: {}", endpoint, res.error());
+        co_return unexpected(res.error());
+    }
+    co_return client;
 }

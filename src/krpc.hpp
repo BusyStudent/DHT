@@ -723,14 +723,3 @@ struct SampleInfoHashesReply {
         }
     }
 };
-
-template <>
-struct std::formatter<NodeEndpoint> {
-    constexpr auto parse(std::format_parse_context &ctxt) const {
-        return ctxt.begin();
-    }
-
-    auto format(const NodeEndpoint &endpoint, std::format_context &ctxt) const {
-        return std::format_to(ctxt.out(), "{} :{}", endpoint.id, endpoint.ip);
-    }
-};

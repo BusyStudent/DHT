@@ -259,6 +259,8 @@ public:
                 return "Bad Reply";
             case KrpcError::RpcErrorMessage:
                 return "The remote send rpc error message";
+            case KrpcError::TargetNotFound:
+                return "Target Not Found";
             default:
                 return "Unknown Error";
         }

@@ -13,6 +13,7 @@
 #include <functional>
 #include "nodeid.hpp"
 #include "net.hpp"
+#include "utp.hpp"
 #include <map>
 #include <set>
 
@@ -35,8 +36,12 @@ public:
      * @param hash 
      */
     auto markFetched(InfoHash hash) -> void;
+
+    auto setUtpContext(UtpContext &utp) -> void;
 private:
     auto doFetch(InfoHash hash) -> Task<void>;
+    auto tcpConnect(const IPEndpoint &endpoint) -> IoTask<TcpClient>;
+    auto utpConnect(const IPEndpoint &endpoint) -> IoTask<UtpClient>;
 
     std::map<
         InfoHash,
@@ -45,7 +50,8 @@ private:
 
     std::set<InfoHash> mFetched; //< The hashs we have fetched
     std::set<InfoHash> mWorkers; // < The hashs we are working on
-    TaskScope mScope;
+    TaskScope   mScope;
+    UtpContext *mUtp = nullptr; // < The utp session we are using
 
     size_t mMaxCocurrent = 5;
     std::function<void (InfoHash hash, std::vector<std::byte> data)> mOnFetched;
