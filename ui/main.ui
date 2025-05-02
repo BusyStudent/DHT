@@ -13,6 +13,232 @@
   <property name="windowTitle">
    <string>DhtClient</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">/* === Global Styles === */
+QWidget {
+    font-family: &quot;Segoe UI&quot;, Arial, sans-serif; /* Clean sans-serif font */
+    font-size: 10pt;
+    background-color: #f0f2f5; /* Light gray background */
+    color: #333333; /* Dark gray text */
+}
+
+QMainWindow {
+     background-color: #f0f2f5;
+}
+
+/* === Tab Widget === */
+QTabWidget::pane {
+    border: 1px solid #cccccc;
+    border-top: none; /* Pane border connected to tabs */
+    background-color: #ffffff; /* White background for tab content area */
+    padding: 10px;
+}
+
+QTabBar::tab {
+    background-color: #e1e4e8; /* Light gray for inactive tabs */
+    color: #555555;
+    border: 1px solid #cccccc;
+    border-bottom: none; /* Tabs sit on top of the pane */
+    padding: 8px 15px;
+    margin-right: 2px; /* Space between tabs */
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:hover {
+    background-color: #f0f2f5; /* Slightly lighter on hover */
+}
+
+QTabBar::tab:selected {
+    background-color: #ffffff; /* Selected tab matches pane background */
+    color: #0366d6; /* Blue text for selected tab */
+    border: 1px solid #cccccc;
+    border-bottom: 1px solid #ffffff; /* Make it look connected to the pane */
+    margin-bottom: -1px; /* Overlap pane border slightly */
+}
+
+/* === Log Area (Assuming QTextEdit) === */
+QTextEdit {
+    background-color: #ffffff;
+    border: 1px solid #d1d5da; /* Subtle border */
+    border-radius: 4px;
+    padding: 5px;
+    color: #24292e;
+    /* Optional: Use a monospace font for IDs and logs */
+    /* font-family: &quot;Consolas&quot;, &quot;Courier New&quot;, monospace; */
+}
+
+/* === Group Boxes (Config, Debug) === */
+QGroupBox {
+    background-color: #f8f9fa; /* Slightly different background for sections */
+    border: 1px solid #d1d5da;
+    border-radius: 6px;
+    margin-top: 10px; /* Space for the title */
+    padding: 20px 10px 10px 10px; /* Top padding pushes content below title */
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left; /* Position title */
+    padding: 0 5px;
+    left: 10px; /* Indent title */
+    color: #0366d6; /* Blue title text */
+    font-weight: bold;
+    background-color: #f8f9fa; /* Match group box background */
+}
+
+/* === Labels === */
+QLabel {
+    background-color: transparent; /* Ensure labels are transparent */
+    color: #444444; /* Slightly softer text color */
+    padding: 2px;
+    margin-bottom: 2px; /* Add space below labels */
+}
+
+/* === Line Edits (Input Fields) === */
+QLineEdit {
+    background-color: #ffffff;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    padding: 6px 8px; /* More padding */
+    selection-background-color: #0366d6;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus {
+    border: 1px solid #0366d6; /* Blue border on focus */
+    outline: none; /* Remove default focus outline if desired */
+}
+
+QLineEdit:read-only {
+     background-color: #e9ecef; /* Gray out read-only fields */
+     color: #6a737d;
+}
+
+/* === Buttons === */
+QPushButton {
+    background-color: #0366d6; /* Primary blue */
+    color: #ffffff;
+    border: 1px solid #0366d6;
+    border-radius: 4px;
+    padding: 6px 15px;
+    min-width: 65px; /* Ensure minimum button width */
+}
+
+QPushButton:hover {
+    background-color: #005cc5; /* Darker blue on hover */
+    border-color: #005cc5;
+}
+
+QPushButton:pressed {
+    background-color: #0052b2; /* Even darker blue when pressed */
+    border-color: #0052b2;
+}
+
+QPushButton:disabled {
+     background-color: #d1d5da;
+     color: #6a737d;
+     border-color: #c1c5ca;
+}
+
+/* Optional: Style the Start button differently (e.g., Green) */
+/* Make sure to set objectName &quot;startButton&quot; in your code for this to work */
+/*
+QPushButton#startButton {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+QPushButton#startButton:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+QPushButton#startButton:pressed {
+    background-color: #1e7e34;
+    border-color: #1c7430;
+}
+*/
+
+
+/* === Checkboxes === */
+QCheckBox {
+    background-color: transparent;
+    spacing: 5px; /* Space between box and text */
+    padding: 3px 0; /* Vertical padding */
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #a1a5aa;
+    border-radius: 3px;
+    background-color: #ffffff;
+}
+
+QCheckBox::indicator:hover {
+    border: 1px solid #0366d6; /* Highlight border on hover */
+}
+
+QCheckBox::indicator:checked {
+    background-color: #0366d6; /* Blue fill when checked */
+    border: 1px solid #0366d6;
+    /* You can add a checkmark image here if you have one in resources */
+    /* image: url(:/icons/checkmark.png); */
+}
+
+QCheckBox::indicator:checked:hover {
+    background-color: #005cc5;
+    border: 1px solid #005cc5;
+}
+
+QCheckBox::indicator:disabled {
+    background-color: #e9ecef;
+    border: 1px solid #c1c5ca;
+}
+
+QCheckBox:focus {
+    outline: none; /* Remove default focus outline */
+}
+QCheckBox::indicator:focus {
+     border: 1px solid #0366d6; /* Blue border when focused */
+}
+/* === Menu Styling === */
+QMenu {
+    background-color: #ffffff; /* White background for the menu */
+    border: 1px solid #cccccc; /* Border around the menu */
+    padding: 5px 0; /* Vertical padding */
+    color: #333333; /* Default text color */
+}
+
+QMenu::item {
+    background-color: transparent; /* Make sure default item background is transparent */
+    padding: 5px 25px 5px 25px; /* Top/Bottom padding, Right/Left padding */
+    margin: 0px 2px; /* Optional: small margin around items */
+    border: none; /* Ensure no border on items by default */
+}
+
+QMenu::item:selected { /* Style for the hovered/selected item */
+    background-color: #0366d6; /* Use your theme's highlight blue */
+    color: #ffffff;          /* White text for contrast */
+    border-radius: 3px;      /* Optional: slightly rounded corners for the highlight */
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #e1e4e8; /* Light gray separator line */
+    margin: 5px 0px; /* Space above/below separator */
+}
+
+QMenu::indicator { /* Style for checkmark/submenu arrows */
+    width: 13px;
+    height: 13px;
+}
+
+/* Style for disabled menu items */
+QMenu::item:disabled {
+    color: #aaaaaa; /* Gray out disabled text */
+    background-color: transparent; /* Ensure no background color */
+}</string>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <property name="leftMargin">
@@ -283,7 +509,7 @@
          <rect>
           <x>840</x>
           <y>10</y>
-          <width>93</width>
+          <width>97</width>
           <height>28</height>
          </rect>
         </property>
@@ -318,7 +544,7 @@
          <rect>
           <x>760</x>
           <y>20</y>
-          <width>75</width>
+          <width>97</width>
           <height>23</height>
          </rect>
         </property>
@@ -386,7 +612,7 @@
      <x>0</x>
      <y>0</y>
      <width>972</width>
-     <height>21</height>
+     <height>23</height>
     </rect>
    </property>
   </widget>

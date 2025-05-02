@@ -17,13 +17,13 @@
 // class QListWidgetItem;
 // class QMenu;
 
-
-
 class InfoHashListWidget : public QListWidget {
 Q_OBJECT // Essential for signals and slots
 
     public : explicit InfoHashListWidget(QWidget *parent = nullptr);
     ~InfoHashListWidget();
+
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
 
 private slots:
     // Slot to handle the context menu request

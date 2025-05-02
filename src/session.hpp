@@ -16,6 +16,12 @@
 
 class DhtSession {
 public:
+    enum FindAlgo {
+        BfsDfs,
+        AStar,
+    };
+
+public:
     DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client);
     ~DhtSession();
 
@@ -46,7 +52,7 @@ public:
      * @param target
      * @return IoTask<std::vector<NodeEndpoint> > (The nodes found, max is KBUCKET_SIZE, sorted by distance)
      */
-    auto findNode(const NodeId &target) -> IoTask<std::vector<NodeEndpoint>>;
+    auto findNode(const NodeId &target, FindAlgo algo = AStar) -> IoTask<std::vector<NodeEndpoint>>;
 
     /**
      * @brief Try to ping a node by ip
@@ -150,7 +156,8 @@ private:
      * @param endpoint
      * @return IoTask<std::vector<NodeEndpoint> >
      */
-    auto findNode(const NodeId &target, const IPEndpoint &endpoint) -> IoTask<std::vector<NodeEndpoint>>;
+    auto findNode(const NodeId &target, const IPEndpoint &endpoint, FindAlgo algo = AStar)
+        -> IoTask<std::vector<NodeEndpoint>>;
 
     /**
      * @brief Try to find the node by target, using the endpoint

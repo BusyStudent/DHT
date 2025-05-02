@@ -3,8 +3,11 @@
 #include <QMimeData>
 #include <QUrl>
 #include <QVBoxLayout> // For layout
+#include <QMouseEvent>
+#include <QFile>
 
 #include "common.hpp"
+#include "../torrent_card.hpp"
 
 InfoHashListWidget::InfoHashListWidget(QWidget *parent) : QListWidget(parent) {
     // 3. Enable custom context menu policy
@@ -33,7 +36,27 @@ InfoHashListWidget::InfoHashListWidget(QWidget *parent) : QListWidget(parent) {
 }
 
 InfoHashListWidget::~InfoHashListWidget() {
-    // No need to delete listWidget explicitly if it has 'this' as parent
+    // No need to delete listWidget explicitly if it has 'this' as parent 
+}
+
+void InfoHashListWidget::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        QListWidgetItem *item = itemAt(event->pos());
+        if (item) {
+            QString torrentFile = item->data((int)CopyableDataFlag::TorrentFile).value<QString>();
+            if (!torrentFile.isEmpty()) {
+                QFile   file(torrentFile);
+                auto    data = file.readAll();
+                Torrent torrent =
+                    Torrent::parse({reinterpret_cast<const std::byte *>(data.constData()), (uint64_t)data.size()});
+                auto card = new TorrentCard;
+                card->setTorrent(torrent);
+                card->setAttribute(Qt::WA_DeleteOnClose);
+                card->show();
+            }
+        }
+    }
+    QListWidget::mouseDoubleClickEvent(event);
 }
 
 // Slot implementation: Show the context menu

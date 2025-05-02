@@ -237,17 +237,32 @@ auto DhtSession::sendKrpc(const BenObject &message, const IPEndpoint &endpoint)
     co_return res;
 }
 
-auto DhtSession::findNode(const NodeId &target, const IPEndpoint &endpoint) -> IoTask<std::vector<NodeEndpoint>> {
+auto DhtSession::findNode(const NodeId &target, const IPEndpoint &endpoint, FindAlgo algo)
+    -> IoTask<std::vector<NodeEndpoint>> {
     FindNodeEnv env;
-    co_return co_await aStarFind(target, std::nullopt, endpoint, env);
+    if (algo == FindAlgo::AStar) {
+        co_return co_await aStarFind(target, std::nullopt, endpoint, env);
+    }
+    else if (algo == FindAlgo::BfsDfs) {
+        co_return co_await findNodeImpl(target, std::nullopt, endpoint, 0, env);
+    }
+    co_return unexpected(Error::Unknown);
 }
 
-auto DhtSession::findNode(const NodeId &target) -> IoTask<std::vector<NodeEndpoint>> {
+auto DhtSession::findNode(const NodeId &target, FindAlgo algo) -> IoTask<std::vector<NodeEndpoint>> {
     FindNodeEnv                                    env;
     std::vector<NodeEndpoint>                      nodes = mRoutingTable.findClosestNodes(target, 3);
     std::vector<IoTask<std::vector<NodeEndpoint>>> tasks;
     for (const auto &node : nodes) {
-        tasks.push_back(aStarFind(target, node.id, node.ip, env));
+        if (algo == FindAlgo::AStar) {
+            tasks.push_back(aStarFind(target, node.id, node.ip, env));
+        }
+        else if (algo == FindAlgo::BfsDfs) {
+            tasks.push_back(findNodeImpl(target, node.id, node.ip, 0, env));
+        }
+        else {
+            co_return unexpected(Error::Unknown);
+        }
     }
     auto                      vec = co_await whenAll(std::move(tasks));
     std::vector<NodeEndpoint> res;
@@ -329,15 +344,20 @@ auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const
         step--;
         auto [nodeEndpoint, _1, _2, cost] = env.openSet.top();
         env.openSet.pop();
-        if (auto nearNodes = co_await findNearNodes(target, nodeEndpoint->id, nodeEndpoint->ip, env); nearNodes) {
+        DHT_LOG("Find node {} by node endpoint {} {}", target, nodeEndpoint->id, nodeEndpoint->ip);
+        if (auto nearNodes = co_await findNearNodes(
+                target, nodeEndpoint->id == NodeId {} ? std::optional<NodeId>() : std::optional(nodeEndpoint->id),
+                nodeEndpoint->ip, env);
+            nearNodes) {
             for (const auto &node : nearNodes.value()) {
                 if (node.id == target) {
                     env.closest = node;
                     co_return nearNodes;
                 }
-                if (env.visited.find({node.id, node.ip}) == env.visited.end()) {
+                if (env.visited.find({node.id, node.ip}) != env.visited.end()) {
                     continue;
                 }
+                auto item = env.visited.emplace_hint(env.visited.end(), node);
                 env.openSet.emplace(&(*item), cost + 1, target.distanceExp(node.id));
                 if (!env.closest.has_value() || target.distance(node.id) < target.distance(env.closest.value().id)) {
                     env.closest = node;
@@ -345,15 +365,18 @@ auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const
             }
         }
     }
-    int                       count = 8;
     std::vector<NodeEndpoint> res;
-    while (count > 0 && !env.openSet.empty()) {
-        auto [nodeEndpoint, _1, _2, _3] = env.openSet.top();
-        env.openSet.pop();
-        res.push_back(*nodeEndpoint);
-        count--;
+    for (auto nodeEndpointer : env.visited) {
+        if (nodeEndpointer.id != NodeId {}) {
+            res.push_back(nodeEndpointer);
+        }
     }
-    if (res.size() > 0) {
+    node_utils::sort(res, target);
+    if (res.size() > 8) {
+        res.resize(8);
+        co_return res;
+    }
+    else if (res.size() > 0) {
         co_return res;
     }
     co_return unexpected(KrpcError::TargetNotFound);
