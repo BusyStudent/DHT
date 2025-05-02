@@ -23,6 +23,12 @@ target("test")
     add_files("src/*.cpp")
     add_files("src/*.c")
     add_files("test.cpp")
+
+target("simulated-annealing")
+    set_default(false)
+    add_packages()
+    set_kind("binary")
+    add_files("simulated-annealing.cpp")
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --

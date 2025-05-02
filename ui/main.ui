@@ -44,7 +44,14 @@
           </property>
           <layout class="QHBoxLayout" name="horizontalLayout_7">
            <item>
-            <widget class="QListWidget" name="logWidget"/>
+            <widget class="LogListWidget" name="logWidget">
+             <property name="contextMenuPolicy">
+              <enum>Qt::CustomContextMenu</enum>
+             </property>
+             <property name="editTriggers">
+              <set>QAbstractItemView::NoEditTriggers</set>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -164,6 +171,13 @@
               <widget class="QPushButton" name="findNodeButton">
                <property name="text">
                 <string>Find Node</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="randFindNodeButton">
+               <property name="text">
+                <string>Rand &amp; Find</string>
                </property>
               </widget>
              </item>
@@ -383,6 +397,11 @@
    <class>InfoHashListWidget</class>
    <extends>QListWidget</extends>
    <header>ui/widgets/info_hash_list_widget.hpp</header>
+  </customwidget>
+  <customwidget>
+   <class>LogListWidget</class>
+   <extends>QListWidget</extends>
+   <header>ui/widgets/log_list_widget.hpp</header>
   </customwidget>
  </customwidgets>
  <resources/>

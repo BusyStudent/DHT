@@ -12,18 +12,11 @@
 #include <QPoint>
 #include <QWidget>
 
-// Forward declaration if needed, but usually included directly
-// class QListWidget;
-// class QListWidgetItem;
-// class QMenu;
-
-
-
-class InfoHashListWidget : public QListWidget {
+class LogListWidget : public QListWidget {
 Q_OBJECT // Essential for signals and slots
 
-    public : explicit InfoHashListWidget(QWidget *parent = nullptr);
-    ~InfoHashListWidget();
+    public : explicit LogListWidget(QWidget *parent = nullptr);
+    ~LogListWidget();
 
 private slots:
     // Slot to handle the context menu request
@@ -31,5 +24,9 @@ private slots:
 
     // Slots for handling the custom copy actions
     void onCopyAsText(QString text);
-    void onCopyAsFile(QString path);
+    void onCopyAsFile(QStringList files);
+
+private:
+    // Helper function for demonstration purposes
+    //   QString generateMagnetLink(const QString &data);
 };

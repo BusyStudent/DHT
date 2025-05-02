@@ -21,6 +21,14 @@
 #include <optional>
 
 #include "./ui/widgets/info_hash_list_widget.hpp"
+#include "src/bt.hpp"
+#include "src/fetchmanager.hpp"
+#include "src/metafetcher.hpp"
+#include "src/session.hpp"
+#include "src/torrent.hpp"
+#include "ui/torrent_card.hpp"
+#include "ui_main.h"
+#include "ui/widgets/common.hpp"
 
 #if __cpp_lib_stacktrace
 #include <stacktrace>
@@ -83,6 +91,7 @@ public:
         });
 
         connect(ui.findNodeButton, &QPushButton::clicked, this, &App::onFindNodeButtonClicked);
+        connect(ui.randFindNodeButton, &QPushButton::clicked, this, &App::onRandFindNodeButtonClikced);
 
         connect(ui.sampleButton, &QPushButton::clicked, this, &App::onSampleButtonClicked);
 
@@ -188,6 +197,12 @@ public:
         }
     }
 
+    auto onRandFindNodeButtonClikced() -> QAsyncSlot<void> {
+        auto text = NodeId::rand().toHex();
+        ui.findNodeEdit->setText(QString::fromUtf8(text));
+        co_await onFindNodeButtonClicked();
+    }
+
     auto onFindNodeButtonClicked() -> QAsyncSlot<void> {
         auto id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str());
         if (id == NodeId::zero()) {
@@ -197,8 +212,13 @@ public:
         auto res = co_await mSession->findNode(id);
         if (res) {
             for (auto &node : *res) {
-                auto str = std::format("node {} at {}", node.id, node.ip);
-                ui.logWidget->addItem(QString::fromUtf8(str));
+                auto             str  = std::format("node {} at {}", node.id, node.ip);
+                QListWidgetItem *item = new QListWidgetItem(QString::fromUtf8(str));
+                QVariantMap      map;
+                map.insert("copy node id", QString::fromUtf8(node.id.toHex()));
+                map.insert("copy node ip", QString::fromStdString(node.ip.toString()));
+                item->setData((int)CopyableDataFlag::TextMap, map);
+                ui.logWidget->addItem(item);
             }
         }
     }
@@ -215,12 +235,22 @@ public:
             co_return;
         }
         if (res->empty()) {
-            auto message = std::format("No Message sampled from {}", endpoint);
-            ui.logWidget->addItem("");
+            auto             message = std::format("No Message sampled from {}", endpoint);
+            QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
+            item->setBackground(Qt::red);
+            QVariantMap map;
+            map.insert("copy sample endpoint", QString::fromStdString(endpoint.toString()));
+            item->setData((int)CopyableDataFlag::TextMap, map);
+            ui.logWidget->addItem(item);
         }
         for (auto &hash : *res) {
-            auto message = std::format("Sample {} success, hash {}", endpoint, hash);
-            ui.logWidget->addItem(QString::fromUtf8(message));
+            auto             message = std::format("Sample {} success, hash {}", endpoint, hash);
+            QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
+            QVariantMap      map;
+            map.insert("copy sample endpoint", QString::fromStdString(endpoint.toString()));
+            map.insert("copy sample hash", QString::fromStdString(hash.toHex()));
+            item->setData((int)CopyableDataFlag::TextMap, map);
+            ui.logWidget->addItem(item);
         }
     }
 

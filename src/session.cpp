@@ -11,10 +11,10 @@ namespace node_utils {
 
 /**
  * @brief Sort the vector of NodeEndpoint by the distance to the target and remove duplicates
- * 
- * @param vec 
- * @param target 
- * @return auto 
+ *
+ * @param vec
+ * @param target
+ * @return auto
  */
 auto sort(std::vector<NodeEndpoint> &vec, const NodeId &target) {
     std::sort(vec.begin(), vec.end(), [&target](const NodeEndpoint &a, const NodeEndpoint &b) {
@@ -23,13 +23,11 @@ auto sort(std::vector<NodeEndpoint> &vec, const NodeId &target) {
     vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
 }
 
-}
+} // namespace node_utils
 
-DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client) : 
-    mCtxt(ctxt), mScope(ctxt), mClient(client), 
-    mEndpoint(client.localEndpoint().value()), mId(id), mRoutingTable(id)
-{
-
+DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client)
+    : mCtxt(ctxt), mScope(ctxt), mClient(client), mEndpoint(client.localEndpoint().value()), mId(id),
+      mRoutingTable(id) {
 }
 
 DhtSession::~DhtSession() {
@@ -37,19 +35,15 @@ DhtSession::~DhtSession() {
     mScope.wait();
 }
 
-auto DhtSession::start() -> Task<void> { 
-    const auto bootstrapNodes = {
-        std::pair{"router.bittorrent.com", "6881"},
-        std::pair{"dht.transmissionbt.com", "6881"},
-        std::pair{"router.utorrent.com", "6881"}
-    };
+auto DhtSession::start() -> Task<void> {
+    const auto bootstrapNodes = {std::pair {"router.bittorrent.com", "6881"},
+                                 std::pair {"dht.transmissionbt.com", "6881"},
+                                 std::pair {"router.utorrent.com", "6881"}};
     if (!mSkipBootstrap) {
         bool booststraped = false;
         for (const auto [host, port] : bootstrapNodes) {
-            addrinfo_t hints {
-                .ai_family = mEndpoint.family()
-            };
-            auto info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
+            addrinfo_t hints {.ai_family = mEndpoint.family()};
+            auto       info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
             if (!info) {
                 DHT_LOG("Failed to get the addrinfo of {}:{} => {}", host, port, info.error());
                 continue;
@@ -125,10 +119,7 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
             co_return {};
         }
         mRoutingTable.updateNode({ping->id, from});
-        auto reply = PingReply {
-            .transId = ping->transId,
-            .id = mId
-        };
+        auto reply   = PingReply {.transId = ping->transId, .id = mId};
         auto encoded = reply.toMessage().encode();
         if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
@@ -146,11 +137,7 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
         if (nodes.empty()) {
             DHT_LOG("No nodes found for {}", find->targetId);
         }
-        auto reply = FindNodeReply {
-            .transId = find->transId,
-            .id = mId,
-            .nodes = nodes
-        };
+        auto reply   = FindNodeReply {.transId = find->transId, .id = mId, .nodes = nodes};
         auto encoded = reply.toMessage().encode();
         if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
@@ -168,12 +155,10 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
         if (nodes.empty()) {
             DHT_LOG("No nodes found for {}", getPeers->infoHash);
         }
-        auto reply = GetPeersReply {
-            .transId = getPeers->transId,
-            .id = mId,
-            .token = "token", // TODO: Generate a token
-            .nodes = nodes
-        };
+        auto reply = GetPeersReply {.transId = getPeers->transId,
+                                    .id      = mId,
+                                    .token   = "token", // TODO: Generate a token
+                                    .nodes   = nodes};
         // Find the peers and push them to the reply
         auto it = mPeers.find(getPeers->infoHash);
         if (it != mPeers.end()) {
@@ -208,10 +193,7 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
         }
         mPeers[announce->infoHash].insert(from);
         mRoutingTable.updateNode({announce->id, from});
-        auto reply = AnnouncePeerReply {
-            .transId = announce->transId,
-            .id = mId
-        };
+        auto reply   = AnnouncePeerReply {.transId = announce->transId, .id = mId};
         auto encoded = reply.toMessage().encode();
         if (auto res = co_await mClient.sendto(ilias::makeBuffer(encoded), from); !res) {
             co_return unexpected(res.error());
@@ -220,11 +202,7 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
     }
     // Finally, if we don't know the query, we send an error
     DHT_LOG("Unknown query {}", query);
-    auto error = ErrorReply {
-        .transId = getMessageTransactionId(message),
-        .errorCode = 204,
-        .error = "Method Unknown"
-    };
+    auto error = ErrorReply {.transId = getMessageTransactionId(message), .errorCode = 204, .error = "Method Unknown"};
     auto encoded = error.toMessage().encode();
     if (auto res = co_await mClient.sendto(makeBuffer(encoded), from); !res) {
         co_return unexpected(res.error());
@@ -233,12 +211,11 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
 }
 
 auto DhtSession::sendKrpc(const BenObject &message, const IPEndpoint &endpoint)
-    -> IoTask<std::pair<BenObject, IPEndpoint> > 
-{
-    auto content = message.encode();
-    auto id = getMessageTransactionId(message);
-    auto [sender, receiver] = oneshot::channel<std::pair<BenObject, IPEndpoint> >();
-    auto [it, emplace] = mPendingQueries.try_emplace(id, std::move(sender));
+    -> IoTask<std::pair<BenObject, IPEndpoint>> {
+    auto content            = message.encode();
+    auto id                 = getMessageTransactionId(message);
+    auto [sender, receiver] = oneshot::channel<std::pair<BenObject, IPEndpoint>>();
+    auto [it, emplace]      = mPendingQueries.try_emplace(id, std::move(sender));
     if (!emplace) {
         DHT_LOG("Exisiting id in queries ?, may overflow? {}", mPendingQueries.size());
         // Raise the debugger
@@ -260,23 +237,19 @@ auto DhtSession::sendKrpc(const BenObject &message, const IPEndpoint &endpoint)
     co_return res;
 }
 
-auto DhtSession::findNode(const NodeId &target, const IPEndpoint &endpoint)
-    -> IoTask<std::vector<NodeEndpoint>> 
-{
+auto DhtSession::findNode(const NodeId &target, const IPEndpoint &endpoint) -> IoTask<std::vector<NodeEndpoint>> {
     FindNodeEnv env;
-    co_return co_await findNodeImpl(target, std::nullopt, endpoint, 0, env);
+    co_return co_await aStarFind(target, std::nullopt, endpoint, env);
 }
 
-auto DhtSession::findNode(const NodeId &target)
-    -> IoTask<std::vector<NodeEndpoint>> 
-{
-    FindNodeEnv env;
-    std::vector<NodeEndpoint> nodes = mRoutingTable.findClosestNodes(target, 8);
-    std::vector<IoTask<std::vector<NodeEndpoint>> > tasks;
+auto DhtSession::findNode(const NodeId &target) -> IoTask<std::vector<NodeEndpoint>> {
+    FindNodeEnv                                    env;
+    std::vector<NodeEndpoint>                      nodes = mRoutingTable.findClosestNodes(target, 3);
+    std::vector<IoTask<std::vector<NodeEndpoint>>> tasks;
     for (const auto &node : nodes) {
-        tasks.push_back(findNodeImpl(target, node.id, node.ip, 0, env));
+        tasks.push_back(aStarFind(target, node.id, node.ip, env));
     }
-    auto vec = co_await whenAll(std::move(tasks));
+    auto                      vec = co_await whenAll(std::move(tasks));
     std::vector<NodeEndpoint> res;
     for (auto &v : vec) {
         if (v) {
@@ -293,11 +266,8 @@ auto DhtSession::findNode(const NodeId &target)
 }
 
 auto DhtSession::ping(const IPEndpoint &nodeIp) -> IoTask<NodeId> {
-    PingQuery query {
-        .transId = allocateTransactionId(),
-        .id = mId
-    };
-    auto res = co_await sendKrpc(query.toMessage(), nodeIp);
+    PingQuery query {.transId = allocateTransactionId(), .id = mId};
+    auto      res = co_await sendKrpc(query.toMessage(), nodeIp);
     if (!res) {
         co_return unexpected(res.error());
     }
@@ -324,9 +294,7 @@ auto DhtSession::peers() const -> const std::map<InfoHash, std::set<IPEndpoint>>
     return mPeers;
 }
 
-auto DhtSession::setOnAnouncePeer(
-    std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback)
-    -> void {
+auto DhtSession::setOnAnouncePeer(std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback) -> void {
     mOnAnnouncePeer = std::move(callback);
 }
 
@@ -334,15 +302,9 @@ auto DhtSession::setSkipBootstrap(bool skip) -> void {
     mSkipBootstrap = skip;
 }
 
-auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp)
-    -> IoTask<std::vector<InfoHash> > 
-{
-    SampleInfoHashesQuery query {
-        .transId = allocateTransactionId(),
-        .id = mId,
-        .target = NodeId::rand()
-    };
-    auto res = co_await sendKrpc(query.toMessage(), nodeIp);
+auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vector<InfoHash>> {
+    SampleInfoHashesQuery query {.transId = allocateTransactionId(), .id = mId, .target = NodeId::rand()};
+    auto                  res = co_await sendKrpc(query.toMessage(), nodeIp);
     if (!res) {
         co_return unexpected(res.error());
     }
@@ -357,20 +319,50 @@ auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp)
     co_return reply->samples;
 }
 
-auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth, FindNodeEnv &env)
-    -> IoTask<std::vector<NodeEndpoint> > 
-{
-    if (depth > MAX_DEPTH) { // MAX_DEPTH ?
-        DHT_LOG("Max depth reached, target {}, endpoint {}, depth {}", target, endpoint, depth);
-        co_return unexpected(Error::Unknown);
+auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env)
+    -> IoTask<std::vector<NodeEndpoint>> {
+
+    auto item = env.visited.emplace_hint(env.visited.end(), NodeEndpoint {NodeId {}, endpoint});
+    env.openSet.emplace(AStarNode(&(*item), 0, target.distanceExp(mId)));
+    int step = 100;
+    while (!env.openSet.empty() && step > 0) {
+        step--;
+        auto [nodeEndpoint, _1, _2, cost] = env.openSet.top();
+        env.openSet.pop();
+        if (auto nearNodes = co_await findNearNodes(target, nodeEndpoint->id, nodeEndpoint->ip, env); nearNodes) {
+            for (const auto &node : nearNodes.value()) {
+                if (node.id == target) {
+                    env.closest = node;
+                    co_return nearNodes;
+                }
+                if (env.visited.find({node.id, node.ip}) == env.visited.end()) {
+                    continue;
+                }
+                env.openSet.emplace(&(*item), cost + 1, target.distanceExp(node.id));
+                if (!env.closest.has_value() || target.distance(node.id) < target.distance(env.closest.value().id)) {
+                    env.closest = node;
+                }
+            }
+        }
     }
-    DHT_LOG("Find node {}, endpoint {}, depth {}", target, endpoint, depth);
-    FindNodeQuery query {
-        .transId = allocateTransactionId(),
-        .id = mId,
-        .targetId = target
-    };
-    auto res = co_await sendKrpc(query.toMessage(), endpoint);
+    int                       count = 8;
+    std::vector<NodeEndpoint> res;
+    while (count > 0 && !env.openSet.empty()) {
+        auto [nodeEndpoint, _1, _2, _3] = env.openSet.top();
+        env.openSet.pop();
+        res.push_back(*nodeEndpoint);
+        count--;
+    }
+    if (res.size() > 0) {
+        co_return res;
+    }
+    co_return unexpected(KrpcError::TargetNotFound);
+}
+
+auto DhtSession::findNearNodes(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint,
+                               FindNodeEnv &env) -> IoTask<std::vector<NodeEndpoint>> {
+    FindNodeQuery query {.transId = allocateTransactionId(), .id = mId, .targetId = target};
+    auto          res = co_await sendKrpc(query.toMessage(), endpoint);
     if (!res) {
         if (id) { // If the id is known, try to mark it as bad node in routing table
             mRoutingTable.markBadNode({*id, endpoint});
@@ -388,33 +380,72 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
     }
     auto reply = std::move(*replyParsed);
     mRoutingTable.updateNode({reply.id, from}); // This node give us reply, add it to routing table
-    env.visited.insert({reply.id, from}); // Mark as visited
-    
+    env.visited.insert({reply.id, from});       // Mark as visited
+
     // Sort by distance, first is the closest
     node_utils::sort(reply.nodes, target);
-    
+
+    if (reply.nodes.empty()) {
+        co_return unexpected(KrpcError::TargetNotFound);
+    }
+
+    co_return reply.nodes;
+}
+
+auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth,
+                              FindNodeEnv &env) -> IoTask<std::vector<NodeEndpoint>> {
+    if (depth > MAX_DEPTH) { // MAX_DEPTH ?
+        DHT_LOG("Max depth reached, target {}, endpoint {}, depth {}", target, endpoint, depth);
+        co_return unexpected(Error::Unknown);
+    }
+    DHT_LOG("Find node {}, endpoint {}, depth {}", target, endpoint, depth);
+    FindNodeQuery query {.transId = allocateTransactionId(), .id = mId, .targetId = target};
+    auto          res = co_await sendKrpc(query.toMessage(), endpoint);
+    if (!res) {
+        if (id) { // If the id is known, try to mark it as bad node in routing table
+            mRoutingTable.markBadNode({*id, endpoint});
+        }
+        co_return unexpected(res.error());
+    }
+    auto &[message, from] = *res;
+    if (isErrorMessage(message)) {
+        co_return unexpected(KrpcError::RpcErrorMessage);
+    }
+
+    auto replyParsed = FindNodeReply::fromMessage(message);
+    if (!replyParsed) { // Failed to parse
+        co_return unexpected(KrpcError::BadReply);
+    }
+    auto reply = std::move(*replyParsed);
+    mRoutingTable.updateNode({reply.id, from}); // This node give us reply, add it to routing table
+    env.visited.insert({reply.id, from});       // Mark as visited
+
+    // Sort by distance, first is the closest
+    node_utils::sort(reply.nodes, target);
+
     if (reply.nodes.empty()) {
         co_return unexpected(KrpcError::TargetNotFound);
     }
     if (reply.nodes.front().id == target) { // Got the target node
         co_return reply.nodes;
     }
-    if (!env.closest || env.closest->distance(target) > reply.id.distance(target)) {
+    if (!env.closest || env.closest->id.distance(target) > reply.id.distance(target)) {
         // No closest node or the closest node is farther than the reply's node
-        env.closest = reply.id;
+        env.closest = {reply.id, from};
     }
 
     // Remove the node far than the reply's node
     std::vector<NodeEndpoint> vec;
     for (auto &[id, ip] : reply.nodes) {
-        assert(env.closest); // Must have a closest node
-        auto nodeDis = id.distance(target); // The node distance to target
-        auto curDis = env.closest->distance(target); // The closest node distance to target
-        if (nodeDis < curDis || depth <= BFS_UNTIL) { // Until reach BFS_UNTIL depth we do BFS
+        assert(env.closest);                             // Must have a closest node
+        auto nodeDis = id.distance(target);              // The node distance to target
+        auto curDis  = env.closest->id.distance(target); // The closest node distance to target
+        if (nodeDis < curDis || depth <= BFS_UNTIL) {    // Until reach BFS_UNTIL depth we do BFS
             vec.emplace_back(id, ip);
         }
         else {
-            DHT_LOG("Node {} is far than current closest node {}, distance: {} > {}, depth: {}", id, reply.id, nodeDis, curDis, depth);
+            DHT_LOG("Node {} is far than current closest node {}, distance: {} > {}, depth: {}", id, reply.id, nodeDis,
+                    curDis, depth);
         }
     }
     if (vec.empty()) {
@@ -424,7 +455,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
 
     // Begin DFS Search
     std::vector<NodeEndpoint> result;
-    auto scope = co_await TaskScope::make();
+    auto                      scope = co_await TaskScope::make();
     for (auto &[id, ip] : vec) {
         auto [it, emplace] = env.visited.emplace(id, ip);
         if (!emplace) { // Already visited
@@ -478,7 +509,8 @@ auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
         DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
         co_return unexpected(res.error());
     }
-    for (size_t i = 10; i < 150; i += 20) { // Try 10, 40, 60, 80, 100, 120, 140, 150, walkthrough the whole address space
+    for (size_t i = 10; i < 150;
+         i += 20) { // Try 10, 40, 60, 80, 100, 120, 140, 150, walkthrough the whole address space
         auto res = co_await findNode(mId.randWithDistance(i));
         if (!res) {
             DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
@@ -490,7 +522,7 @@ auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
     co_return {};
 }
 
-auto DhtSession::processUdp(std::span<const std::byte> buffer, const IPEndpoint &endpoint) -> Task<void> { 
+auto DhtSession::processUdp(std::span<const std::byte> buffer, const IPEndpoint &endpoint) -> Task<void> {
     // Try parse to BenObject
     auto message = BenObject::decode(buffer);
     if (message.isNull()) {
@@ -498,7 +530,7 @@ auto DhtSession::processUdp(std::span<const std::byte> buffer, const IPEndpoint 
         co_return;
     }
     auto type = getMessageType(message);
-    auto id = getMessageTransactionId(message);
+    auto id   = getMessageTransactionId(message);
 
     // Dispatch
     if (type == MessageType::Reply || type == MessageType::Error) {
@@ -509,7 +541,7 @@ auto DhtSession::processUdp(std::span<const std::byte> buffer, const IPEndpoint 
         }
         auto sender = std::move(it->second);
         mPendingQueries.erase(it);
-        sender.send(std::pair{std::move(message), endpoint});
+        sender.send(std::pair {std::move(message), endpoint});
         co_return;
     }
     if (type == MessageType::Query) {
@@ -525,11 +557,11 @@ auto DhtSession::allocateTransactionId() -> std::string {
         mTransactionId = 0;
     }
     mTransactionId += 1;
-    auto id = std::bit_cast<std::array<char, sizeof(mTransactionId)> >(mTransactionId);
+    auto id = std::bit_cast<std::array<char, sizeof(mTransactionId)>>(mTransactionId);
     return std::string(id.begin(), id.end());
 }
 
-auto DhtSession::cleanupPeersThread() -> Task<void> { 
+auto DhtSession::cleanupPeersThread() -> Task<void> {
     while (true) {
         auto res = co_await sleep(mCleanupInterval);
         if (!res) {
@@ -541,7 +573,7 @@ auto DhtSession::cleanupPeersThread() -> Task<void> {
     }
 }
 
-auto DhtSession::refreshTableThread() -> Task<void> { 
+auto DhtSession::refreshTableThread() -> Task<void> {
     while (true) {
         if (auto res = co_await sleep(mRefreshInterval); !res) {
             DHT_LOG("DhtSession::refreshTableThread request quit");
@@ -572,7 +604,7 @@ auto DhtSession::refreshTableThread() -> Task<void> {
     }
 }
 
-auto DhtSession::randomSearchThread() -> Task<void> { 
+auto DhtSession::randomSearchThread() -> Task<void> {
     while (true) {
         if (auto res = co_await sleep(mRandomSearchInterval); !res) { // Do random search every 5 minutes
             DHT_LOG("DhtSession::randomSearchThread request quit");

@@ -4,6 +4,8 @@
 #include <QUrl>
 #include <QVBoxLayout> // For layout
 
+#include "common.hpp"
+
 InfoHashListWidget::InfoHashListWidget(QWidget *parent) : QListWidget(parent) {
     // 3. Enable custom context menu policy
     setContextMenuPolicy(Qt::CustomContextMenu);
@@ -51,16 +53,16 @@ void InfoHashListWidget::showCustomContextMenu(const QPoint &pos) {
         QString hash = item->data((int)CopyableDataFlag::Hash).value<QString>();
         if (!hash.isEmpty()) {
             QAction *copyHashAction = contextMenu.addAction("Copy as Hash (SHA1)");
-            connect(copyHashAction, &QAction::triggered, this, [this, hash]() { this->onCopyAsHash(hash); });
+            connect(copyHashAction, &QAction::triggered, this, [this, hash]() { this->onCopyAsText(hash); });
             QAction *copytMagnetAction = contextMenu.addAction("Copy as Magnet link");
             connect(copytMagnetAction, &QAction::triggered, this,
-                    [this, hash]() { this->onCopyAsMagnetLink(QString("magnet:?xt=urn:btih:" + hash)); });
+                    [this, hash]() { this->onCopyAsText(QString("magnet:?xt=urn:btih:" + hash)); });
         }
 
         QString path = item->data((int)CopyableDataFlag::TorrentFile).value<QString>();
         if (!path.isEmpty()) {
             QAction *copyTorrentAction = contextMenu.addAction("Copy as Torrent file");
-            connect(copyTorrentAction, &QAction::triggered, this, [this, path]() { this->onCopyAsTorrentFile(path); });
+            connect(copyTorrentAction, &QAction::triggered, this, [this, path]() { this->onCopyAsFile(path); });
         }
 
         contextMenu.addSeparator();
@@ -96,13 +98,7 @@ void InfoHashListWidget::onCopyAsText(QString text) {
     qDebug() << "Copied as Text:" << text;
 }
 
-void InfoHashListWidget::onCopyAsHash(QString text) {
-    QClipboard *clipboard = QApplication::clipboard();
-    clipboard->setText(text);
-    qDebug() << "Copied as Hash (SHA1):" << text;
-}
-
-void InfoHashListWidget::onCopyAsTorrentFile(QString path) {
+void InfoHashListWidget::onCopyAsFile(QString path) {
     QClipboard *clipboard = QApplication::clipboard();
 
     // 2. Create QMimeData
@@ -124,29 +120,3 @@ void InfoHashListWidget::onCopyAsTorrentFile(QString path) {
     // The clipboard takes ownership of mimeData pointer - DO NOT delete it
     clipboard->setMimeData(mimeData);
 }
-
-void InfoHashListWidget::onCopyAsMagnetLink(QString text) {
-    QClipboard *clipboard = QApplication::clipboard();
-    clipboard->setText(text);
-    qDebug() << "Copied as Torrent file:" << text;
-}
-
-// // --- Helper Function (Placeholder) ---
-// QString InfoHashListWidget::generateMagnetLink(const QString &data) {
-//   // Very basic placeholder - creates a fake magnet link using a hash of the
-//   // data
-//   QByteArray dataBytes = data.toUtf8();
-//   QByteArray infoHashBytes = QCryptographicHash::hash(
-//       dataBytes,
-//       QCryptographicHash::Sha1); // Torrents often use SHA1 for info_hash
-//   QString infoHashHex = infoHashBytes.toHex();
-
-//   // Construct a basic magnet link structure (replace with actual tracker
-//   URLs
-//   // etc.)
-//   return QString("magnet:?xt=urn:btih:%1&dn=%2&tr=udp://"
-//                  "tracker.openbittorrent.com:80/announce&tr=udp://"
-//                  "tracker.opentrackr.org:1337/announce")
-//       .arg(infoHashHex)                    // The info hash
-//       .arg(QUrl::toPercentEncoding(data)); // The display name (URL encoded)
-// }
