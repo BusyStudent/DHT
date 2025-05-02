@@ -5,10 +5,9 @@
 #include <QVBoxLayout> // For layout
 
 InfoHashListWidget::InfoHashListWidget(QWidget *parent) : QListWidget(parent) {
-  // 3. Enable custom context menu policy
-  setContextMenuPolicy(Qt::CustomContextMenu);
-  connect(this, &InfoHashListWidget::customContextMenuRequested, this,
-          &InfoHashListWidget::showCustomContextMenu);
+    // 3. Enable custom context menu policy
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(this, &InfoHashListWidget::customContextMenuRequested, this, &InfoHashListWidget::showCustomContextMenu);
 
 #if 0
   auto item = new QListWidgetItem("a test item, no any data");
@@ -24,117 +23,112 @@ InfoHashListWidget::InfoHashListWidget(QWidget *parent) : QListWidget(parent) {
                  "./torrents/39d037b465901cbaa743e4045b5b75cddb38d6eb.torrent");
   addItem(item2);
 #endif
-  //   item->setData(, const QVariant &value)
+    //   item->setData(, const QVariant &value)
 
-  //   // 4. Connect the signal to our slot
-  //   connect(this, &QListWidget::customContextMenuRequested, this,
-  //           &InfoHashListWidget::showContextMenu);
+    //   // 4. Connect the signal to our slot
+    //   connect(this, &QListWidget::customContextMenuRequested, this,
+    //           &InfoHashListWidget::showContextMenu);
 }
 
 InfoHashListWidget::~InfoHashListWidget() {
-  // No need to delete listWidget explicitly if it has 'this' as parent
+    // No need to delete listWidget explicitly if it has 'this' as parent
 }
 
 // Slot implementation: Show the context menu
 void InfoHashListWidget::showCustomContextMenu(const QPoint &pos) {
-  // Get the item at the requested position
-  QListWidgetItem *item = itemAt(pos);
+    // Get the item at the requested position
+    QListWidgetItem *item = itemAt(pos);
 
-  // Only show the menu if an item was actually clicked
-  if (item) {
-    // Create the menu
-    QMenu contextMenu(this); // Parent 'this' for proper memory management
+    // Only show the menu if an item was actually clicked
+    if (item) {
+        // Create the menu
+        QMenu contextMenu(this); // Parent 'this' for proper memory management
 
-    // --- Create Actions ---
-    QAction *copyTextAction = contextMenu.addAction("Copy as Text");
-    connect(copyTextAction, &QAction::triggered, this,
-            [this, item]() { this->onCopyAsText(item->text()); });
+        // --- Create Actions ---
+        QAction *copyTextAction = contextMenu.addAction("Copy as Text");
+        connect(copyTextAction, &QAction::triggered, this, [this, item]() { this->onCopyAsText(item->text()); });
 
-    QString hash = item->data((int)CopyableDataFlag::Hash).value<QString>();
-    if (!hash.isEmpty()) {
-      QAction *copyHashAction = contextMenu.addAction("Copy as Hash (SHA256)");
-      connect(copyHashAction, &QAction::triggered, this,
-              [this, hash]() { this->onCopyAsHash(hash); });
-      QAction *copytMagnetAction = contextMenu.addAction("Copy as Magnet link");
-      connect(copytMagnetAction, &QAction::triggered, this, [this, hash]() {
-        this->onCopyAsMagnetLink(QString("magnet:?xt=urn:btih:" + hash));
-      });
+        QString hash = item->data((int)CopyableDataFlag::Hash).value<QString>();
+        if (!hash.isEmpty()) {
+            QAction *copyHashAction = contextMenu.addAction("Copy as Hash (SHA1)");
+            connect(copyHashAction, &QAction::triggered, this, [this, hash]() { this->onCopyAsHash(hash); });
+            QAction *copytMagnetAction = contextMenu.addAction("Copy as Magnet link");
+            connect(copytMagnetAction, &QAction::triggered, this,
+                    [this, hash]() { this->onCopyAsMagnetLink(QString("magnet:?xt=urn:btih:" + hash)); });
+        }
+
+        QString path = item->data((int)CopyableDataFlag::TorrentFile).value<QString>();
+        if (!path.isEmpty()) {
+            QAction *copyTorrentAction = contextMenu.addAction("Copy as Torrent file");
+            connect(copyTorrentAction, &QAction::triggered, this, [this, path]() { this->onCopyAsTorrentFile(path); });
+        }
+
+        contextMenu.addSeparator();
+        // --- Connect Actions ---
+        QAction *deleteAction = contextMenu.addAction("Delete");
+        QAction *clearAction  = contextMenu.addAction("Clear");
+
+        connect(deleteAction, &QAction::triggered, this, [this, item]() {
+            auto itemp = takeItem(row(item));
+            delete itemp;
+        });
+
+        connect(clearAction, &QAction::triggered, this, [this]() { clear(); });
+
+        // --- Show the menu ---
+        // mapToGlobal converts widget coordinates to screen coordinates
+        contextMenu.exec(mapToGlobal(pos));
     }
+    else {
+        // add clear menu
+        QMenu contextMenu(this); // Parent 'this' for proper memory management
 
-    QString path =
-        item->data((int)CopyableDataFlag::TorrentFile).value<QString>();
-    if (!path.isEmpty()) {
-      QAction *copyTorrentAction =
-          contextMenu.addAction("Copy as Torrent file");
-      connect(copyTorrentAction, &QAction::triggered, this,
-              [this, path]() { this->onCopyAsTorrentFile(path); });
+        QAction *clearAction = contextMenu.addAction("Clear");
+        connect(clearAction, &QAction::triggered, this, [this]() { clear(); });
     }
-
-    contextMenu.addSeparator();
-    // --- Connect Actions ---
-    QAction *deleteAction = contextMenu.addAction("Delete");
-    QAction *clearAction = contextMenu.addAction("Clear");
-
-    connect(deleteAction, &QAction::triggered, this, [this, item]() {
-      auto itemp = takeItem(row(item));
-      delete itemp;
-    });
-
-    connect(clearAction, &QAction::triggered, this, [this]() { clear(); });
-
-    // --- Show the menu ---
-    // mapToGlobal converts widget coordinates to screen coordinates
-    contextMenu.exec(mapToGlobal(pos));
-  } else {
-    // add clear menu
-    QMenu contextMenu(this); // Parent 'this' for proper memory management
-
-    QAction *clearAction = contextMenu.addAction("Clear");
-    connect(clearAction, &QAction::triggered, this, [this]() { clear(); });
-  }
 }
 
 // --- Action Handlers ---
 
 void InfoHashListWidget::onCopyAsText(QString text) {
-  QClipboard *clipboard = QApplication::clipboard();
-  clipboard->setText(text);
-  qDebug() << "Copied as Text:" << text;
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(text);
+    qDebug() << "Copied as Text:" << text;
 }
 
 void InfoHashListWidget::onCopyAsHash(QString text) {
-  QClipboard *clipboard = QApplication::clipboard();
-  clipboard->setText(text);
-  qDebug() << "Copied as Hash (SHA256):" << text;
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(text);
+    qDebug() << "Copied as Hash (SHA1):" << text;
 }
 
 void InfoHashListWidget::onCopyAsTorrentFile(QString path) {
-  QClipboard *clipboard = QApplication::clipboard();
+    QClipboard *clipboard = QApplication::clipboard();
 
-  // 2. Create QMimeData
-  QMimeData *mimeData = new QMimeData(); // Clipboard will take ownership
+    // 2. Create QMimeData
+    QMimeData *mimeData = new QMimeData(); // Clipboard will take ownership
 
-  // 3. Prepare File URLs (using absolute paths)
-  QList<QUrl> urls;
+    // 3. Prepare File URLs (using absolute paths)
+    QList<QUrl> urls;
 
-  urls.append(QUrl::fromLocalFile(path));
+    urls.append(QUrl::fromLocalFile(path));
 
-  if (urls.isEmpty()) {
-    qWarning() << "No valid files provided to copy.";
-  }
+    if (urls.isEmpty()) {
+        qWarning() << "No valid files provided to copy.";
+    }
 
-  // 4. Set URLs on QMimeData
-  mimeData->setUrls(urls);
+    // 4. Set URLs on QMimeData
+    mimeData->setUrls(urls);
 
-  // 5. Set QMimeData on Clipboard
-  // The clipboard takes ownership of mimeData pointer - DO NOT delete it
-  clipboard->setMimeData(mimeData);
+    // 5. Set QMimeData on Clipboard
+    // The clipboard takes ownership of mimeData pointer - DO NOT delete it
+    clipboard->setMimeData(mimeData);
 }
 
 void InfoHashListWidget::onCopyAsMagnetLink(QString text) {
-  QClipboard *clipboard = QApplication::clipboard();
-  clipboard->setText(text);
-  qDebug() << "Copied as Torrent file:" << text;
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(text);
+    qDebug() << "Copied as Torrent file:" << text;
 }
 
 // // --- Helper Function (Placeholder) ---
