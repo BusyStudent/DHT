@@ -4,6 +4,7 @@
 #include "src/metafetcher.hpp"
 #include "src/session.hpp"
 #include "src/torrent.hpp"
+#include "src/utp.hpp"
 #include "ui/torrent_card.hpp"
 #include "ui_main.h"
 #include <QApplication>
@@ -125,7 +126,13 @@ public:
         auto endpoint = IPEndpoint::fromString(ui.bindEdit->text().toStdString().c_str());
         auto nodeId   = idText.isEmpty() ? NodeId::rand() : NodeId::fromHex(idText.toStdString().c_str());
         // Make session and start it
-        mSession.emplace(mIo, nodeId, endpoint.value());
+        mUdp = UdpClient(mIo, endpoint->family());
+        mUdp.setOption(sockopt::ReuseAddress(true));
+        mUdp.bind(*endpoint).value();
+
+        mUtp.emplace(mUdp);
+
+        mSession.emplace(mIo, nodeId, mUdp);
         mSession->setOnAnouncePeer([this](const InfoHash &hash, const IPEndpoint &endpoint) {
             onHashFound(hash);
             mFetchManager.addHash(hash, endpoint);
@@ -138,7 +145,30 @@ public:
         if (ui.skipBootstrapBox->isChecked()) {
             mSession->setSkipBootstrap(true);
         }
-        mHandle = spawn(mIo, &DhtSession::run, &*mSession);
+
+        mScope.spawn(&App::processUdp, this);
+        mScope.spawn(&DhtSession::start, &*mSession);
+    }
+
+    auto processUdp() -> Task<void> {
+        DHT_LOG("App::processUdp start");
+        std::byte buffer[65535];
+        IPEndpoint endpoint;
+        while (true) {
+            auto res = co_await mUdp.recvfrom(buffer, endpoint);
+            if (!res) {
+                if (res.error() != Error::Canceled) {
+                    DHT_LOG("App::processUdp recvfrom failed: {}", res.error());
+                }
+                break;
+            }
+            auto data = std::span(buffer, res.value());
+            if (mUtp->processUdp(data, endpoint)) { // Valid UTP packet
+                continue;
+            }
+            co_await mSession->processUdp(data, endpoint);
+        }
+        DHT_LOG("App::processUdp quit");
     }
 
     auto onPingButtonClicked() -> QAsyncSlot<void> {
@@ -261,10 +291,8 @@ public:
     }
 
     ~App() {
-        if (mHandle) {
-            mHandle.cancel();
-            mHandle.wait();
-        }
+        mScope.cancel();
+        mScope.wait();
         if (mSession && ui.saveSessionBox->isEnabled()) {
             mSession->saveFile("session.cache");
         }
@@ -283,8 +311,10 @@ public:
 private:
     QIoContext                mIo;
     Ui::MainWindow            ui;
+    UdpClient                 mUdp;
+    std::optional<UtpContext> mUtp;
     std::optional<DhtSession> mSession;
-    WaitHandle<>              mHandle;
+    TaskScope                 mScope;
 
     std::set<InfoHash> mHashs;
     FetchManager       mFetchManager;

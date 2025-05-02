@@ -14,15 +14,15 @@
 
 class DhtSession {
 public:
-    DhtSession(IoContext &ctxt, const NodeId &id, const IPEndpoint &listen);
+    DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client);
     ~DhtSession();
 
     /**
-     * @brief Execute the session, doing the bootstrap and 
+     * @brief Execute the session, doing the bootstrap and spawn background task, it will return if the init is done
      * 
      * @return Task<void> 
      */
-    auto run() -> Task<void>;
+    auto start() -> Task<void>;
 
     /**
      * @brief Save the routing table to the file
@@ -97,6 +97,13 @@ public:
      * @return IoTask<std::vector<InfoHash> >  The sampled info hashes
      */
     auto sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vector<InfoHash> >;
+
+    /**
+     * @brief Process the udp input from the socket
+     * 
+     * @return Task<void> 
+     */
+    auto processUdp(std::span<const std::byte> buffer, const IPEndpoint &from) -> Task<void>;
 private:
     struct FindNodeEnv {
         std::set<NodeEndpoint> visited;
@@ -154,13 +161,6 @@ private:
     auto bootstrap(const IPEndpoint &nodeIp) -> IoTask<void>;
 
     /**
-     * @brief Process the input from the socket
-     * 
-     * @return Task<void> 
-     */
-    auto processInput() -> Task<void>;
-
-    /**
      * @brief Allocate a transaction id
      * 
      * @return std::string 
@@ -190,7 +190,7 @@ private:
 
     IoContext &mCtxt;
     TaskScope  mScope;
-    UdpClient  mClient;
+    UdpClient &mClient;
     IPEndpoint mEndpoint;
     NodeId     mId;
     RoutingTable mRoutingTable;

@@ -25,13 +25,11 @@ auto sort(std::vector<NodeEndpoint> &vec, const NodeId &target) {
 
 }
 
-DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, const IPEndpoint &addr) : 
-    mCtxt(ctxt), mScope(ctxt), mClient(ctxt, addr.family()), 
-    mEndpoint(addr), mId(id), mRoutingTable(id)
+DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client) : 
+    mCtxt(ctxt), mScope(ctxt), mClient(client), 
+    mEndpoint(client.localEndpoint().value()), mId(id), mRoutingTable(id)
 {
-    mClient.setOption(sockopt::ReuseAddress(true)).value();
-    mClient.bind(addr).value();
-    mScope.spawn(&DhtSession::processInput, this);
+
 }
 
 DhtSession::~DhtSession() {
@@ -39,7 +37,7 @@ DhtSession::~DhtSession() {
     mScope.wait();
 }
 
-auto DhtSession::run() -> Task<void> { 
+auto DhtSession::start() -> Task<void> { 
     const auto bootstrapNodes = {
         std::pair{"router.bittorrent.com", "6881"},
         std::pair{"dht.transmissionbt.com", "6881"},
@@ -75,8 +73,6 @@ auto DhtSession::run() -> Task<void> {
     mScope.spawn(cleanupPeersThread());
     mScope.spawn(refreshTableThread());
     mScope.spawn(randomSearchThread());
-    // Join the scope
-    co_await mScope;
     co_return;
 }
 
@@ -171,7 +167,6 @@ auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> Io
         auto nodes = mRoutingTable.findClosestNodes(getPeers->infoHash, 8);
         if (nodes.empty()) {
             DHT_LOG("No nodes found for {}", getPeers->infoHash);
-            co_return {}; // TODO: Maybe send a failure
         }
         auto reply = GetPeersReply {
             .transId = getPeers->transId,
@@ -245,7 +240,7 @@ auto DhtSession::sendKrpc(const BenObject &message, const IPEndpoint &endpoint)
     auto [sender, receiver] = oneshot::channel<std::pair<BenObject, IPEndpoint> >();
     auto [it, emplace] = mPendingQueries.try_emplace(id, std::move(sender));
     if (!emplace) {
-        DHT_LOG("Exisiting id in queries ?, may bug");
+        DHT_LOG("Exisiting id in queries ?, may overflow? {}", mPendingQueries.size());
         // Raise the debugger
 #if defined(_MSC_VER)
         __debugbreak();
@@ -495,46 +490,32 @@ auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
     co_return {};
 }
 
-auto DhtSession::processInput() -> Task<void> { 
-    DHT_LOG("DhtSession::processInput start");
-    char buffer[65535];
-    IPEndpoint endpoint;
-    while (true) {
-        auto res = co_await mClient.recvfrom(makeBuffer(buffer), endpoint);
-        if (!res) {
-            if (res.error() != Error::Canceled) {
-                DHT_LOG("DhtSession::processInput recvfrom failed: {}", res.error());
-            }
-            break;
-        }
+auto DhtSession::processUdp(std::span<const std::byte> buffer, const IPEndpoint &endpoint) -> Task<void> { 
+    // Try parse to BenObject
+    auto message = BenObject::decode(buffer);
+    if (message.isNull()) {
+        DHT_LOG("DhtSession::processInput parse message failed: from endpoint {}", endpoint);
+        co_return;
+    }
+    auto type = getMessageType(message);
+    auto id = getMessageTransactionId(message);
 
-        // Try parse to BenObject
-        auto data = std::string_view(buffer, *res);
-        auto message = BenObject::decode(data);
-        if (message.isNull()) {
-            DHT_LOG("DhtSession::processInput parse message failed: from endpoint {}", endpoint);
-            continue;
+    // Dispatch
+    if (type == MessageType::Reply || type == MessageType::Error) {
+        auto it = mPendingQueries.find(id); //< Try find the query of the reply
+        if (it == mPendingQueries.end()) {
+            ILIAS_LOG("DhtSession::processInput unknown reply: {} from endpoint {}, no pending query matched", message);
+            co_return;
         }
-        auto type = getMessageType(message);
-        auto id = getMessageTransactionId(message);
-
-        // Dispatch
-        if (type == MessageType::Reply || type == MessageType::Error) {
-            auto it = mPendingQueries.find(id); //< Try find the query of the reply
-            if (it == mPendingQueries.end()) {
-                ILIAS_LOG("DhtSession::processInput unknown reply: {} from endpoint {}, no pending query matched", message);
-                continue;
-            }
-            auto sender = std::move(it->second);
-            mPendingQueries.erase(it);
-            sender.send(std::pair{std::move(message), endpoint});
-            continue;
-        }
-        if (type == MessageType::Query) {
-            // Handle query
-            if (!co_await onQuery(message, endpoint)) {
-                break;
-            }
+        auto sender = std::move(it->second);
+        mPendingQueries.erase(it);
+        sender.send(std::pair{std::move(message), endpoint});
+        co_return;
+    }
+    if (type == MessageType::Query) {
+        // Handle query
+        if (!co_await onQuery(message, endpoint)) {
+            co_return;
         }
     }
 }
