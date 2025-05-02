@@ -237,6 +237,93 @@ QMenu::indicator { /* Style for checkmark/submenu arrows */
 QMenu::item:disabled {
     color: #aaaaaa; /* Gray out disabled text */
     background-color: transparent; /* Ensure no background color */
+}
+/* === Scrollbar Styles === */
+QScrollBar:vertical {
+    border: 1px solid #d1d5da; /* Match other borders */
+    background-color: #f0f2f5; /* Match main background */
+    width: 14px;             /* Width of the vertical scroll bar */
+    margin: 1px 0px 1px 0px; /* Top/Bottom margin, reduce side margins */
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #b1cde0; /* A lighter, softer blue/gray */
+    min-height: 25px;        /* Minimum height of the handle */
+    border-radius: 5px;      /* Slightly smaller radius than the track */
+    border: 1px solid #a1b8c9; /* Subtle border for definition */
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #0366d6; /* Main blue on hover */
+    border-color: #005cc5;
+}
+
+QScrollBar::handle:vertical:pressed {
+    background-color: #005cc5; /* Darker blue when pressed */
+    border-color: #0052b2;
+}
+
+QScrollBar:horizontal {
+    border: 1px solid #d1d5da;
+    background-color: #f0f2f5;
+    height: 14px;            /* Height of the horizontal scroll bar */
+    margin: 0px 1px 0px 1px; /* Left/Right margin, reduce top/bottom margins */
+    border-radius: 6px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #b1cde0;
+    min-width: 25px;         /* Minimum width of the handle */
+    border-radius: 5px;
+    border: 1px solid #a1b8c9;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #0366d6;
+    border-color: #005cc5;
+}
+
+ QScrollBar::handle:horizontal:pressed {
+    background-color: #005cc5;
+    border-color: #0052b2;
+}
+
+/* Hide the scroll bar arrows for a cleaner look */
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+    subcontrol-position: top; /* Required for height: 0 to work */
+    subcontrol-origin: margin;
+}
+QScrollBar::add-line:vertical {
+    height: 0px;
+    subcontrol-position: bottom; /* Required for height: 0 to work */
+    subcontrol-origin: margin;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+    width: 0px;
+}
+QScrollBar::add-line:horizontal {
+    width: 0px;
+    subcontrol-position: right; /* Required for width: 0 to work */
+    subcontrol-origin: margin;
+}
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+    subcontrol-position: left; /* Required for width: 0 to work */
+    subcontrol-origin: margin;
+}
+
+
+/* Style the track area (page background) - make it transparent */
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
 }</string>
   </property>
   <widget class="QWidget" name="centralwidget">

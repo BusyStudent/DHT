@@ -46,6 +46,9 @@ void InfoHashListWidget::mouseDoubleClickEvent(QMouseEvent *event) {
             QString torrentFile = item->data((int)CopyableDataFlag::TorrentFile).value<QString>();
             if (!torrentFile.isEmpty()) {
                 QFile   file(torrentFile);
+                if (!file.open(QFile::ReadOnly)) {
+                    return;
+                }
                 auto    data = file.readAll();
                 Torrent torrent =
                     Torrent::parse({reinterpret_cast<const std::byte *>(data.constData()), (uint64_t)data.size()});

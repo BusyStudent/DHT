@@ -114,7 +114,7 @@ UtpContext::UtpContext(UdpClient &client) : mClient(client) {
     });
     mScope.spawn([this]() -> Task<void> {
         while (co_await sleep(500ms)) {
-            UTP_LOG("Check timeouts");
+            // UTP_LOG("Check timeouts");
             utp_check_timeouts(mCtxt);
             utp_issue_deferred_acks(mCtxt);
         }
