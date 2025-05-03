@@ -19,14 +19,7 @@
 #include "src/session.hpp"
 #include "src/torrent.hpp"
 #include "src/utp.hpp"
-#include "ui/torrent_card.hpp"
-#include "ui_main.h"
-#include "./ui/widgets/info_hash_list_widget.hpp"
-#include "src/bt.hpp"
-#include "src/fetchmanager.hpp"
-#include "src/metafetcher.hpp"
-#include "src/session.hpp"
-#include "src/torrent.hpp"
+#include "ui/widgets/info_hash_list_widget.hpp"
 #include "ui/torrent_card.hpp"
 #include "ui_main.h"
 #include "ui/widgets/common.hpp"
@@ -41,9 +34,6 @@ class App final : public QMainWindow {
 public:
     App() {
         ui.setupUi(this);
-
-        connect(&mStatusBarClearTimer, &QTimer::timeout, this, [this]() { statusBar()->clearMessage(); });
-        mStatusBarClearTimer.setSingleShot(true);
 
         ui.algoComboBox->addItems({"a star", "bfs-dfs"});
         ui.algoComboBox->setCurrentIndex(0);
@@ -216,7 +206,7 @@ public:
     auto onFindNodeButtonClicked() -> QAsyncSlot<void> {
         auto id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str());
         if (id == NodeId::zero()) {
-            ui.statusbar->showMessage("Invalid node id");
+            ui.statusbar->showMessage("Invalid node id", 5);
             co_return;
         }
         auto res = co_await mSession->findNode(id, (DhtSession::FindAlgo)ui.algoComboBox->currentIndex());
@@ -236,20 +226,18 @@ public:
     auto onSampleButtonClicked() -> QAsyncSlot<void> {
         IPEndpoint endpoint(ui.sampleEdit->text().toStdString().c_str());
         if (!endpoint.isValid()) {
-            ui.statusbar->showMessage("Invalid endpoint");
-            mStatusBarClearTimer.start(2000);
+            ui.statusbar->showMessage("Invalid endpoint", 5);
             co_return;
         }
         ui.statusbar->showMessage("Sample ...");
         auto res = co_await mSession->sampleInfoHashes(endpoint);
         if (!res) {
-            ui.statusbar->showMessage("Sample failed");
+            ui.statusbar->showMessage("Sample failed", 5);
             auto message = std::format("Sample {} failed by {}", endpoint, res.error());
-            mStatusBarClearTimer.start(2000);
             co_return;
         }
         if (res->empty()) {
-            ui.statusbar->showMessage("Sample failed");
+            ui.statusbar->showMessage("Sample failed", 5);
             auto             message = std::format("No Message sampled from {}", endpoint);
             QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
             item->setBackground(Qt::red);
@@ -259,7 +247,7 @@ public:
             ui.logWidget->addItem(item);
         }
         for (auto &hash : *res) {
-            ui.statusbar->showMessage("Sample success");
+            ui.statusbar->showMessage("Sample success", 5);
             auto             message = std::format("Sample {} success, hash {}", endpoint, hash);
             QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
             QVariantMap      map;
@@ -268,7 +256,6 @@ public:
             item->setData((int)CopyableDataFlag::TextMap, map);
             ui.logWidget->addItem(item);
         }
-        mStatusBarClearTimer.start(2000);
     }
 
     auto onBtConnectButtonClicked() -> QAsyncSlot<void> {
@@ -276,7 +263,7 @@ public:
         auto endpoint = IPEndpoint(ui.btIpEdit->text().toStdString().c_str());
         auto infoHash = InfoHash::fromHex(ui.btHashEdit->text().toStdString().c_str());
         if (!endpoint.isValid() || infoHash == InfoHash::zero()) {
-            ui.statusbar->showMessage("Invalid endpoint or hash");
+            ui.statusbar->showMessage("Invalid endpoint or hash", 5);
             co_return;
         }
 #if 0
@@ -340,7 +327,6 @@ public:
     ~App() {
         mScope.cancel();
         mScope.wait();
-        mStatusBarClearTimer.stop();
         if (mSession && ui.saveSessionBox->isEnabled()) {
             mSession->saveFile("session.cache");
         }
@@ -363,7 +349,6 @@ private:
     std::optional<UtpContext> mUtp;
     std::optional<DhtSession> mSession;
     TaskScope                 mScope;
-    QTimer                    mStatusBarClearTimer;
 
     std::set<InfoHash> mHashs;
     FetchManager       mFetchManager;
