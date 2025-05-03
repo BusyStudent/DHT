@@ -17,8 +17,8 @@
 class DhtSession {
 public:
     enum FindAlgo {
+        AStar = 0,
         BfsDfs,
-        AStar,
     };
 
 public:
@@ -113,22 +113,9 @@ public:
     auto processUdp(std::span<const std::byte> buffer, const IPEndpoint &from) -> Task<void>;
 
 private:
-    struct AStarNode {
-        const NodeEndpoint *node;
-        int                 g; // The distance from the start node
-        int                 h; // The distance from the target node
-        int                 f; // The total cost
-
-        AStarNode(const NodeEndpoint *node, int g, int h) : node(node), g(g), h(h), f(g + h) {}
-
-        auto operator<=>(const AStarNode &b) const { return f <=> b.f; }
-    };
-
     struct FindNodeEnv {
         std::set<NodeEndpoint>      visited;
         std::optional<NodeEndpoint> closest; // The closest node to the target
-        // *********** a star find ***********
-        std::priority_queue<AStarNode> openSet;
     };
 
     /**
@@ -169,11 +156,11 @@ private:
      * @param visited The visited nodes
      * @return IoTask<std::vector<NodeEndpoint> >
      */
-    auto findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth,
-                      FindNodeEnv &env) -> IoTask<std::vector<NodeEndpoint>>;
+    auto bfsDfsFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth,
+                    FindNodeEnv &env) -> IoTask<std::vector<NodeEndpoint>>;
 
-    auto aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env)
-        -> IoTask<std::vector<NodeEndpoint>>;
+    auto aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env,
+                   int max_parallel = 8, int max_step = 20) -> IoTask<std::vector<NodeEndpoint>>;
     auto findNearNodes(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env)
         -> IoTask<std::vector<NodeEndpoint>>;
 

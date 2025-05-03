@@ -22,6 +22,16 @@ auto sort(std::vector<NodeEndpoint> &vec, const NodeId &target) {
     });
     vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
 }
+struct AStarNode {
+    const NodeEndpoint *node;
+    int                 g; // The distance from the start node
+    int                 h; // The distance from the target node
+    int                 f; // The total cost
+
+    AStarNode(const NodeEndpoint *node, int g, int h) : node(node), g(g), h(h), f(g + h) {}
+
+    auto operator<=>(const AStarNode &b) const { return f <=> b.f; }
+};
 
 } // namespace node_utils
 
@@ -244,7 +254,7 @@ auto DhtSession::findNode(const NodeId &target, const IPEndpoint &endpoint, Find
         co_return co_await aStarFind(target, std::nullopt, endpoint, env);
     }
     else if (algo == FindAlgo::BfsDfs) {
-        co_return co_await findNodeImpl(target, std::nullopt, endpoint, 0, env);
+        co_return co_await bfsDfsFind(target, std::nullopt, endpoint, 0, env);
     }
     co_return unexpected(Error::Unknown);
 }
@@ -258,7 +268,7 @@ auto DhtSession::findNode(const NodeId &target, FindAlgo algo) -> IoTask<std::ve
             tasks.push_back(aStarFind(target, node.id, node.ip, env));
         }
         else if (algo == FindAlgo::BfsDfs) {
-            tasks.push_back(findNodeImpl(target, node.id, node.ip, 0, env));
+            tasks.push_back(bfsDfsFind(target, node.id, node.ip, 0, env));
         }
         else {
             co_return unexpected(Error::Unknown);
@@ -334,36 +344,47 @@ auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vecto
     co_return reply->samples;
 }
 
-auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env)
-    -> IoTask<std::vector<NodeEndpoint>> {
-
+auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env,
+                           int max_parallel, int max_step) -> IoTask<std::vector<NodeEndpoint>> {
+    std::priority_queue<node_utils::AStarNode> openSet;
     auto item = env.visited.emplace_hint(env.visited.end(), NodeEndpoint {NodeId {}, endpoint});
-    env.openSet.emplace(AStarNode(&(*item), 0, target.distanceExp(mId)));
-    int step = 100;
-    while (!env.openSet.empty() && step > 0) {
-        step--;
-        auto [nodeEndpoint, _1, _2, cost] = env.openSet.top();
-        env.openSet.pop();
-        DHT_LOG("Find node {} by node endpoint {} {}", target, nodeEndpoint->id, nodeEndpoint->ip);
-        if (auto nearNodes = co_await findNearNodes(
+    openSet.emplace(node_utils::AStarNode(&(*item), 0, target.distanceExp(mId)));
+    int                                            step = std::max(max_step, 1);
+    std::vector<IoTask<std::vector<NodeEndpoint>>> tasks;
+    std::vector<int>                               tasksCost;
+    while (!openSet.empty() && step-- > 0) {
+        int parallel = std::min(max_parallel, 10);
+        while (!openSet.empty() && parallel-- > 0) {
+            auto [nodeEndpoint, _1, _2, cost] = openSet.top();
+            DHT_LOG("Find node {} by node endpoint {} {}", target, nodeEndpoint->id, nodeEndpoint->ip);
+            openSet.pop();
+            tasksCost.push_back(cost);
+            tasks.emplace_back(findNearNodes(
                 target, nodeEndpoint->id == NodeId {} ? std::optional<NodeId>() : std::optional(nodeEndpoint->id),
-                nodeEndpoint->ip, env);
-            nearNodes) {
-            for (const auto &node : nearNodes.value()) {
+                nodeEndpoint->ip, env));
+        }
+        auto nearNodes = co_await whenAll(std::move(tasks));
+        for (int i = 0; i < nearNodes.size(); ++i) {
+            if (!nearNodes[i]) {
+                continue;
+            }
+            for (const auto &node : nearNodes[i].value()) {
                 if (node.id == target) {
                     env.closest = node;
-                    co_return nearNodes;
+                    co_return nearNodes[i];
                 }
                 if (env.visited.find({node.id, node.ip}) != env.visited.end()) {
                     continue;
                 }
                 auto item = env.visited.emplace_hint(env.visited.end(), node);
-                env.openSet.emplace(&(*item), cost + 1, target.distanceExp(node.id));
+                openSet.emplace(&(*item), tasksCost[i] + 1, target.distanceExp(node.id));
                 if (!env.closest.has_value() || target.distance(node.id) < target.distance(env.closest.value().id)) {
                     env.closest = node;
                 }
             }
         }
+        tasks.clear();
+        tasksCost.clear();
     }
     std::vector<NodeEndpoint> res;
     for (auto nodeEndpointer : env.visited) {
@@ -415,8 +436,8 @@ auto DhtSession::findNearNodes(const NodeId &target, std::optional<NodeId> id, c
     co_return reply.nodes;
 }
 
-auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth,
-                              FindNodeEnv &env) -> IoTask<std::vector<NodeEndpoint>> {
+auto DhtSession::bfsDfsFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, size_t depth,
+                            FindNodeEnv &env) -> IoTask<std::vector<NodeEndpoint>> {
     if (depth > MAX_DEPTH) { // MAX_DEPTH ?
         DHT_LOG("Max depth reached, target {}, endpoint {}, depth {}", target, endpoint, depth);
         co_return unexpected(Error::Unknown);
@@ -486,7 +507,7 @@ auto DhtSession::findNodeImpl(const NodeId &target, std::optional<NodeId> id, co
             continue; // Skip it
         }
         scope.spawn([&, this]() -> Task<void> {
-            auto res = co_await findNodeImpl(target, id, ip, depth + 1, env);
+            auto res = co_await bfsDfsFind(target, id, ip, depth + 1, env);
             if (!res) {
                 if (res.error() == Error::Canceled) {
                     scope.cancel();

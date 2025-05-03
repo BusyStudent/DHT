@@ -1,12 +1,4 @@
 #include <filesystem>
-#include "src/bt.hpp"
-#include "src/fetchmanager.hpp"
-#include "src/metafetcher.hpp"
-#include "src/session.hpp"
-#include "src/torrent.hpp"
-#include "src/utp.hpp"
-#include "ui/torrent_card.hpp"
-#include "ui_main.h"
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -19,7 +11,16 @@
 #include <ilias/platform/qt_utils.hpp>
 #include <iostream>
 #include <optional>
+#include <QTimer>
 
+#include "src/bt.hpp"
+#include "src/fetchmanager.hpp"
+#include "src/metafetcher.hpp"
+#include "src/session.hpp"
+#include "src/torrent.hpp"
+#include "src/utp.hpp"
+#include "ui/torrent_card.hpp"
+#include "ui_main.h"
 #include "./ui/widgets/info_hash_list_widget.hpp"
 #include "src/bt.hpp"
 #include "src/fetchmanager.hpp"
@@ -40,6 +41,12 @@ class App final : public QMainWindow {
 public:
     App() {
         ui.setupUi(this);
+
+        connect(&mStatusBarClearTimer, &QTimer::timeout, this, [this]() { statusBar()->clearMessage(); });
+        mStatusBarClearTimer.setSingleShot(true);
+
+        ui.algoComboBox->addItems({"a star", "bfs-dfs"});
+        ui.algoComboBox->setCurrentIndex(0);
 
         // Prepare fetcher
         mFetchManager.setOnFetched(
@@ -162,7 +169,7 @@ public:
 
     auto processUdp() -> Task<void> {
         APP_LOG("App::processUdp start");
-        std::byte buffer[65535];
+        std::byte  buffer[65535];
         IPEndpoint endpoint;
         while (true) {
             auto res = co_await mUdp.recvfrom(buffer, endpoint);
@@ -212,7 +219,7 @@ public:
             ui.statusbar->showMessage("Invalid node id");
             co_return;
         }
-        auto res = co_await mSession->findNode(id);
+        auto res = co_await mSession->findNode(id, (DhtSession::FindAlgo)ui.algoComboBox->currentIndex());
         if (res) {
             for (auto &node : *res) {
                 auto             str  = std::format("node {} at {}", node.id, node.ip);
@@ -230,31 +237,38 @@ public:
         IPEndpoint endpoint(ui.sampleEdit->text().toStdString().c_str());
         if (!endpoint.isValid()) {
             ui.statusbar->showMessage("Invalid endpoint");
+            mStatusBarClearTimer.start(2000);
             co_return;
         }
+        ui.statusbar->showMessage("Sample ...");
         auto res = co_await mSession->sampleInfoHashes(endpoint);
         if (!res) {
+            ui.statusbar->showMessage("Sample failed");
             auto message = std::format("Sample {} failed by {}", endpoint, res.error());
+            mStatusBarClearTimer.start(2000);
             co_return;
         }
         if (res->empty()) {
+            ui.statusbar->showMessage("Sample failed");
             auto             message = std::format("No Message sampled from {}", endpoint);
             QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
             item->setBackground(Qt::red);
             QVariantMap map;
-            map.insert("copy sample endpoint", QString::fromStdString(endpoint.toString()));
+            map.insert("copy endpoint", QString::fromStdString(endpoint.toString()));
             item->setData((int)CopyableDataFlag::TextMap, map);
             ui.logWidget->addItem(item);
         }
         for (auto &hash : *res) {
+            ui.statusbar->showMessage("Sample success");
             auto             message = std::format("Sample {} success, hash {}", endpoint, hash);
             QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
             QVariantMap      map;
-            map.insert("copy sample endpoint", QString::fromStdString(endpoint.toString()));
-            map.insert("copy sample hash", QString::fromStdString(hash.toHex()));
+            map.insert("copy endpoint", QString::fromStdString(endpoint.toString()));
+            map.insert("copy hash", QString::fromStdString(hash.toHex()));
             item->setData((int)CopyableDataFlag::TextMap, map);
             ui.logWidget->addItem(item);
         }
+        mStatusBarClearTimer.start(2000);
     }
 
     auto onBtConnectButtonClicked() -> QAsyncSlot<void> {
@@ -326,6 +340,7 @@ public:
     ~App() {
         mScope.cancel();
         mScope.wait();
+        mStatusBarClearTimer.stop();
         if (mSession && ui.saveSessionBox->isEnabled()) {
             mSession->saveFile("session.cache");
         }
@@ -348,6 +363,7 @@ private:
     std::optional<UtpContext> mUtp;
     std::optional<DhtSession> mSession;
     TaskScope                 mScope;
+    QTimer                    mStatusBarClearTimer;
 
     std::set<InfoHash> mHashs;
     FetchManager       mFetchManager;

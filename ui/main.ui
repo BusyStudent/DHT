@@ -159,48 +159,54 @@ QPushButton#startButton:pressed {
 */
 
 
-/* === Checkboxes === */
+/* === Checkbox Styles (Refined Iconless) === */
 QCheckBox {
     background-color: transparent;
-    spacing: 5px; /* Space between box and text */
-    padding: 3px 0; /* Vertical padding */
+    spacing: 8px; /* More space between box and text */
+    padding: 3px 0;
+    color: #333333; /* Ensure text color is consistent */
 }
 
 QCheckBox::indicator {
-    width: 16px;
-    height: 16px;
-    border: 1px solid #a1a5aa;
-    border-radius: 3px;
-    background-color: #ffffff;
+    width: 15px;  /* Slightly smaller */
+    height: 15px;
+    border: 1px solid #a1a5aa; /* Default gray border */
+    border-radius: 3px;      /* Slightly rounded corners */
+    background-color: #ffffff; /* White background when unchecked */
 }
 
 QCheckBox::indicator:hover {
-    border: 1px solid #0366d6; /* Highlight border on hover */
+    border: 1px solid #767a7f; /* Darker gray border on hover (unchecked) */
+}
+
+QCheckBox::indicator:focus {
+     border: 1px solid #0366d6; /* Blue border when focused (uses Tab key) */
 }
 
 QCheckBox::indicator:checked {
-    background-color: #0366d6; /* Blue fill when checked */
-    border: 1px solid #0366d6;
-    /* You can add a checkmark image here if you have one in resources */
-    /* image: url(:/icons/checkmark.png); */
+    background-color: #0366d6; /* Blue background when checked */
+    border: 1px solid #0366d6; /* Matching blue border when checked */
+    /* No image needed */
 }
 
 QCheckBox::indicator:checked:hover {
-    background-color: #005cc5;
-    border: 1px solid #005cc5;
+    background-color: #005cc5; /* Darker blue background on hover (checked) */
+    border: 1px solid #005cc5; /* Matching darker blue border */
+}
+
+QCheckBox::indicator:checked:focus {
+    border: 1px solid #00408a; /* Even darker blue border when focused+checked */
 }
 
 QCheckBox::indicator:disabled {
-    background-color: #e9ecef;
-    border: 1px solid #c1c5ca;
+    background-color: #e9ecef; /* Light gray background when disabled */
+    border: 1px solid #c1c5ca;   /* Lighter gray border */
 }
 
 QCheckBox:focus {
-    outline: none; /* Remove default focus outline */
+    outline: none; /* Remove default focus outline from the entire checkbox */
 }
-QCheckBox::indicator:focus {
-     border: 1px solid #0366d6; /* Blue border when focused */
-}
+
 /* === Menu Styling === */
 QMenu {
     background-color: #ffffff; /* White background for the menu */
@@ -324,6 +330,142 @@ QScrollBar::sub-line:horizontal {
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
     background: none;
+}
+
+/* === List Widget Styles === */
+QListWidget {
+    background-color: #ffffff; /* Match TextEdit background */
+    border: 1px solid #d1d5da; /* Match other borders */
+    border-radius: 4px;        /* Match other elements */
+    outline: none; /* Remove focus outline from the widget itself */
+    padding: 2px; /* Small padding around the items */
+}
+
+QListWidget::item {
+    background-color: transparent; /* Default item background */
+    padding: 3px 8px; /* Reduced vertical padding (3px top/bottom), kept horizontal (8px left/right) */
+    margin: 0px;      /* Removed vertical margin between items */
+    border-radius: 2px; /* Optional: slightly reduce radius for tighter look */
+    color: #333333; /* Default text color */
+    border: none; /* Ensure no border by default */
+}
+
+QListWidget::item:hover {
+    background-color: #e8f1fa; /* Light blue subtle hover */
+    color: #24292e;
+}
+
+QListWidget::item:selected {
+    background-color: #0366d6; /* Theme blue for selection */
+    color: #ffffff;          /* White text on selection */
+    /* outline: none;  Optional: Remove dotted focus outline on item */
+}
+
+/* Style for selected item when the widget doesn't have focus */
+QListWidget::item:selected:!active {
+    background-color: #d1d5da; /* Gray background when inactive */
+    color: #333333;          /* Dark text when inactive */
+}
+
+/* === ComboBox Styles === */
+QComboBox {
+    background-color: #ffffff; /* White background */
+    border: 1px solid #d1d5da; /* Standard border */
+    border-radius: 4px;       /* Rounded corners */
+    padding: 4px 25px 4px 8px; /* Top/Bottom, Right (space for arrow), Left */
+    min-height: 20px;         /* Ensure minimum height */
+    color: #333333;
+    selection-background-color: #0366d6; /* For editable combobox text selection */
+    selection-color: #ffffff;
+}
+
+/* Style when the mouse hovers over the combo box */
+QComboBox:hover {
+    border-color: #a1a5aa; /* Slightly darker border on hover */
+}
+
+/* Style when the combo box has focus */
+QComboBox:focus {
+    border-color: #0366d6; /* Blue border on focus */
+    outline: none;
+}
+
+/* Style for the drop-down arrow */
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 20px; /* Width of the arrow area */
+
+    border-left-width: 1px;
+    border-left-color: #d1d5da; /* Separator line */
+    border-left-style: solid;
+    border-top-right-radius: 3px; /* Match main radius */
+    border-bottom-right-radius: 3px;
+    background-color: transparent; /* Make the dropdown button area transparent */
+}
+
+QComboBox::down-arrow {
+    /* You can use an image here if you have one */
+    /* image: url(:/icons/down_arrow.png); */
+    /* Simple arrow using border tricks (adjust size/color as needed) */
+    border-style: solid;
+    border-width: 1px;
+    border-color: #555555 transparent transparent transparent; /* Gray downward arrow */
+    width: 0px;
+    height: 0px;
+    /* Position the arrow */
+    position: relative;
+    top: 2px; /* Adjust vertical position */
+}
+
+QComboBox::down-arrow:on { /* Arrow when the popup is open */
+     /* Optional: Change arrow direction or color */
+     /* Example: Make it point up */
+     /* border-color: transparent transparent #555555 transparent; */
+     /* top: -3px; */
+}
+
+/* Style for the dropdown list view itself */
+QComboBox QAbstractItemView {
+    background-color: #ffffff;    /* White background */
+    border: 1px solid #cccccc;    /* Border around the popup */
+    border-radius: 4px;           /* Rounded corners */
+    padding: 4px 0px;             /* Vertical padding inside the view */
+    selection-background-color: #0366d6; /* Selection highlight color */
+    selection-color: #ffffff;     /* Text color for selected item */
+    outline: none;                /* Remove focus outline */
+    color: #333333;               /* Default text color */
+}
+
+/* Style for individual items in the dropdown list */
+QComboBox QAbstractItemView::item {
+    padding: 5px 10px;      /* Padding within each item */
+    min-height: 20px;       /* Ensure items are not too small */
+    background-color: transparent; /* Default item background */
+    border-radius: 3px;     /* Optional rounding for hover/selection */
+    margin: 0 2px;          /* Optional horizontal margin */
+    color: #333333;               /* Default text color */
+}
+
+/* Style for item when hovered */
+QComboBox QAbstractItemView::item:hover {
+    background-color: #e8f1fa; /* Light blue subtle hover */
+    color: #24292e;
+}
+
+/* Style for disabled ComboBox */
+QComboBox:disabled {
+    background-color: #e9ecef;
+    color: #6a737d;
+    border-color: #c1c5ca;
+}
+
+QComboBox::down-arrow:disabled {
+    border-top-color: #aaaaaa; /* Lighter gray arrow */
+}
+
+QComboBox::drop-down:disabled {
+    border-left-color: #c1c5ca;
 }</string>
   </property>
   <widget class="QWidget" name="centralwidget">
@@ -349,202 +491,292 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
        <attribute name="title">
         <string>Main</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout">
-        <item row="0" column="0" rowspan="2">
-         <widget class="QGroupBox" name="groupBox_3">
-          <property name="title">
-           <string>Log</string>
+       <layout class="QHBoxLayout" name="horizontalLayout_16">
+        <property name="spacing">
+         <number>6</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QSplitter" name="splitter">
+          <property name="frameShadow">
+           <enum>QFrame::Plain</enum>
           </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_7">
-           <item>
-            <widget class="LogListWidget" name="logWidget">
-             <property name="contextMenuPolicy">
-              <enum>Qt::CustomContextMenu</enum>
-             </property>
-             <property name="editTriggers">
-              <set>QAbstractItemView::NoEditTriggers</set>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QGroupBox" name="groupBox_2">
-          <property name="title">
-           <string>Config</string>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
           </property>
-          <layout class="QVBoxLayout" name="verticalLayout_3">
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_4">
-             <item>
-              <widget class="QLabel" name="label">
-               <property name="text">
-                <string>NodeId:</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="nodeIdEdit"/>
-             </item>
-             <item>
-              <widget class="QPushButton" name="randButton">
-               <property name="text">
-                <string>Rand</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_5">
-             <item>
-              <widget class="QLabel" name="label_2">
-               <property name="text">
-                <string>Bind:</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="bindEdit">
-               <property name="text">
-                <string>0.0.0.0:0</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="startButton">
-               <property name="text">
-                <string>Start</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item>
-            <widget class="QCheckBox" name="saveSessionBox">
-             <property name="text">
-              <string>Save Session</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QCheckBox" name="skipBootstrapBox">
-             <property name="text">
-              <string>Skip Bootstrap</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QGroupBox" name="groupBox">
-          <property name="enabled">
-           <bool>false</bool>
+          <property name="handleWidth">
+           <number>1</number>
           </property>
-          <property name="title">
-           <string>Debug</string>
-          </property>
-          <layout class="QVBoxLayout" name="verticalLayout">
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_2">
-             <item>
-              <widget class="QLabel" name="label_3">
-               <property name="text">
-                <string>NodeIp:</string>
+          <widget class="QGroupBox" name="groupBox_3">
+           <property name="title">
+            <string>Log</string>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_7">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="LogListWidget" name="logWidget">
+              <property name="contextMenuPolicy">
+               <enum>Qt::CustomContextMenu</enum>
+              </property>
+              <property name="editTriggers">
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="verticalLayoutWidget">
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QGroupBox" name="groupBox_2">
+              <property name="title">
+               <string>Config</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_3">
+               <property name="leftMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="pingEdit"/>
-             </item>
-             <item>
-              <widget class="QPushButton" name="pingButton">
-               <property name="text">
-                <string>Ping</string>
+               <property name="topMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_3">
-             <item>
-              <widget class="QLabel" name="label_4">
-               <property name="text">
-                <string>NodeId:</string>
+               <property name="rightMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="findNodeEdit"/>
-             </item>
-             <item>
-              <widget class="QPushButton" name="findNodeButton">
-               <property name="text">
-                <string>Find Node</string>
+               <property name="bottomMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="randFindNodeButton">
-               <property name="text">
-                <string>Rand &amp; Find</string>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_17">
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QLabel" name="label_15">
+                   <property name="text">
+                    <string>Node Search Algo:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="algoComboBox">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_4">
+                 <item>
+                  <widget class="QLabel" name="label">
+                   <property name="text">
+                    <string>NodeId:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="nodeIdEdit"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="randButton">
+                   <property name="text">
+                    <string>Rand</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_5">
+                 <item>
+                  <widget class="QLabel" name="label_2">
+                   <property name="text">
+                    <string>Bind:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="bindEdit">
+                   <property name="text">
+                    <string>0.0.0.0:0</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="startButton">
+                   <property name="text">
+                    <string>Start</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="saveSessionBox">
+                 <property name="text">
+                  <string>Save Session</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="skipBootstrapBox">
+                 <property name="text">
+                  <string>Skip Bootstrap</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupBox">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="title">
+               <string>Debug</string>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout">
+               <property name="leftMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_6">
-             <item>
-              <widget class="QLabel" name="label_6">
-               <property name="text">
-                <string>NodeIp:</string>
+               <property name="topMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLineEdit" name="sampleEdit"/>
-             </item>
-             <item>
-              <widget class="QPushButton" name="sampleButton">
-               <property name="text">
-                <string>Sample</string>
+               <property name="rightMargin">
+                <number>0</number>
                </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item>
-            <widget class="QPushButton" name="dumpRouteTableButton">
-             <property name="text">
-              <string>Dump RouteTable</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="dumpPeersButton">
-             <property name="text">
-              <string>Dump Peers Anounced</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <spacer name="verticalSpacer">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>40</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-          </layout>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_2">
+                 <item>
+                  <widget class="QLabel" name="label_3">
+                   <property name="text">
+                    <string>NodeIp:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="pingEdit"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="pingButton">
+                   <property name="text">
+                    <string>Ping</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_3">
+                 <item>
+                  <widget class="QLabel" name="label_4">
+                   <property name="text">
+                    <string>NodeId:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="findNodeEdit"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="findNodeButton">
+                   <property name="text">
+                    <string>Find Node</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="randFindNodeButton">
+                   <property name="text">
+                    <string>Rand &amp; Find</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_6">
+                 <item>
+                  <widget class="QLabel" name="label_6">
+                   <property name="text">
+                    <string>NodeIp:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="sampleEdit"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="sampleButton">
+                   <property name="text">
+                    <string>Sample</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <widget class="QPushButton" name="dumpRouteTableButton">
+                 <property name="text">
+                  <string>Dump RouteTable</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="dumpPeersButton">
+                 <property name="text">
+                  <string>Dump Peers Anounced</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="verticalSpacer">
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>20</width>
+                   <height>40</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
          </widget>
         </item>
        </layout>
@@ -626,68 +858,56 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
        <attribute name="title">
         <string>Bt Peer Test</string>
        </attribute>
-       <widget class="QPushButton" name="btConnectButton">
-        <property name="geometry">
-         <rect>
-          <x>760</x>
-          <y>20</y>
-          <width>97</width>
-          <height>23</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Connect</string>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="btIpEdit">
-        <property name="geometry">
-         <rect>
-          <x>160</x>
-          <y>20</y>
-          <width>113</width>
-          <height>20</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="btHashEdit">
-        <property name="geometry">
-         <rect>
-          <x>540</x>
-          <y>20</y>
-          <width>113</width>
-          <height>20</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QLabel" name="label_5">
-        <property name="geometry">
-         <rect>
-          <x>60</x>
-          <y>20</y>
-          <width>54</width>
-          <height>12</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Ip:</string>
-        </property>
-       </widget>
-       <widget class="QLabel" name="label_7">
-        <property name="geometry">
-         <rect>
-          <x>433</x>
-          <y>20</y>
-          <width>81</width>
-          <height>20</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>InfoHash:</string>
-        </property>
-       </widget>
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_8">
+          <item>
+           <widget class="QLabel" name="label_5">
+            <property name="text">
+             <string>Ip:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="btIpEdit">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_7">
+            <property name="text">
+             <string>InfoHash:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="btHashEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btConnectButton">
+            <property name="text">
+             <string>Connect</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <spacer name="verticalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>
