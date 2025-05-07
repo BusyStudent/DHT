@@ -9,12 +9,12 @@
 #include <format>
 #include <ilias/platform/qt.hpp>
 #include <ilias/platform/qt_utils.hpp>
-#include <iostream>
 #include <optional>
 #include <QTimer>
 
 #include "src/bt.hpp"
 #include "src/fetchmanager.hpp"
+#include "src/samplemanager.hpp"
 #include "src/metafetcher.hpp"
 #include "src/session.hpp"
 #include "src/torrent.hpp"
@@ -30,6 +30,19 @@
 
 #pragma comment(linker, "/SUBSYSTEM:console")
 
+struct SampleNode {
+    enum Status {
+        NoStatus,
+        Retry,
+        BlackList,
+    };
+    IPEndpoint endpoint = {};
+    int        timeout  = -1; // The time in seconds the client should wait before sampleing the node
+    Status     status   = NoStatus;
+
+    auto operator<=>(const SampleNode &rhs) const { return timeout <=> rhs.timeout; }
+};
+
 class App final : public QMainWindow {
 public:
     App() {
@@ -37,6 +50,8 @@ public:
 
         ui.algoComboBox->addItems({"a star", "bfs-dfs"});
         ui.algoComboBox->setCurrentIndex(0);
+
+        ui.autoSampleBox->setDisabled(true);
 
         // Prepare fetcher
         mFetchManager.setOnFetched(
@@ -59,6 +74,7 @@ public:
             ui.startButton->setDisabled(true);
             // ui.randButton->setDisabled(true);
             ui.groupBox->setDisabled(false);
+            ui.autoSampleBox->setDisabled(false);
 
             start();
         });
@@ -114,6 +130,17 @@ public:
             }
         });
 
+        connect(ui.autoSampleBox, &QCheckBox::clicked, this, [this](bool checked) -> QAsyncSlot<> {
+            if (mSampleManager != nullptr) {
+                if (checked) {
+                    co_await mSampleManager->start();
+                }
+                else {
+                    co_await mSampleManager->stop();
+                }
+            }
+        });
+
         // Try Load config
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
@@ -154,6 +181,12 @@ public:
             mSession->setSkipBootstrap(true);
         }
         mScope.spawn(&DhtSession::start, &*mSession);
+        mSampleManager = std::make_unique<SampleManager>(mSession.value());
+        mSampleManager->setOnInfoHashs([this](const std::vector<InfoHash> &infohashs) {
+            for (const auto &hash : infohashs) {
+                onHashFound(hash);
+            }
+        });
 #endif
     }
 
@@ -327,6 +360,10 @@ public:
     ~App() {
         mScope.cancel();
         mScope.wait();
+        if (mSampleManager) {
+            mSampleManager->stop().wait();
+        }
+        mSampleManager.reset();
         if (mSession && ui.saveSessionBox->isEnabled()) {
             mSession->saveFile("session.cache");
         }
@@ -343,12 +380,13 @@ public:
     }
 
 private:
-    QIoContext                mIo;
-    Ui::MainWindow            ui;
-    UdpClient                 mUdp;
-    std::optional<UtpContext> mUtp;
-    std::optional<DhtSession> mSession;
-    TaskScope                 mScope;
+    QIoContext                     mIo;
+    Ui::MainWindow                 ui;
+    UdpClient                      mUdp;
+    std::optional<UtpContext>      mUtp;
+    std::unique_ptr<SampleManager> mSampleManager;
+    TaskScope                      mScope;
+    std::optional<DhtSession>      mSession;
 
     std::set<InfoHash> mHashs;
     FetchManager       mFetchManager;

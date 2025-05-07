@@ -91,6 +91,13 @@ public:
     auto setOnAnouncePeer(std::function<void(const InfoHash &hash, const IPEndpoint &peer)> callback) -> void;
 
     /**
+     * @brief Set the callback triggered when a peer is query
+     *
+     * @param callback
+     */
+    auto setOnQuery(std::function<void(const BenObject &object, const IPEndpoint &peer)> callback) -> void;
+
+    /**
      * @brief Set the Skip Bootstrap object
      *
      * @param skip Skip the bootstrap?
@@ -104,6 +111,7 @@ public:
      * @return IoTask<std::vector<InfoHash> >  The sampled info hashes
      */
     auto sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vector<InfoHash>>;
+    auto sample(const IPEndpoint &ndeIp) -> IoTask<SampleInfoHashesReply>;
 
     /**
      * @brief Process the udp input from the socket
@@ -222,6 +230,7 @@ private:
         mPeers; //< The peers they announced
     std::function<void(const InfoHash &hash, const IPEndpoint &peer)>
         mOnAnnouncePeer; //< The callback when we got a announce peer
+    std::function<void(const BenObject &message, const IPEndpoint &from)> mOnQuery; // The callback when we got a query
 
     // Config
     bool mSkipBootstrap = false;

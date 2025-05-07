@@ -122,6 +122,9 @@ auto DhtSession::loadFile(const char *file) -> void {
 auto DhtSession::onQuery(const BenObject &message, const IPEndpoint &from) -> IoTask<void> {
     DHT_LOG("Incoming query {} from {}", message, from);
     auto query = message["q"].toString();
+    if (mOnQuery) {
+        mOnQuery(message, from); // Call the callback
+    }
     if (query == "ping") { // Give the pong back
         auto ping = PingQuery::fromMessage(message);
         if (!ping) {
@@ -323,6 +326,10 @@ auto DhtSession::setOnAnouncePeer(std::function<void(const InfoHash &hash, const
     mOnAnnouncePeer = std::move(callback);
 }
 
+auto DhtSession::setOnQuery(std::function<void(const BenObject &object, const IPEndpoint &peer)> callback) -> void {
+    mOnQuery = std::move(callback);
+}
+
 auto DhtSession::setSkipBootstrap(bool skip) -> void {
     mSkipBootstrap = skip;
 }
@@ -342,6 +349,23 @@ auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vecto
         co_return unexpected(KrpcError::BadReply);
     }
     co_return reply->samples;
+}
+
+auto DhtSession::sample(const IPEndpoint &nodeIp) -> IoTask<SampleInfoHashesReply> {
+    SampleInfoHashesQuery query {.transId = allocateTransactionId(), .id = mId, .target = NodeId::rand()};
+    auto                  res = co_await sendKrpc(query.toMessage(), nodeIp);
+    if (!res) {
+        co_return unexpected(res.error());
+    }
+    auto &[message, from] = *res;
+    if (isErrorMessage(message)) {
+        co_return unexpected(KrpcError::RpcErrorMessage);
+    }
+    auto reply = SampleInfoHashesReply::fromMessage(message);
+    if (!reply) {
+        co_return unexpected(KrpcError::BadReply);
+    }
+    co_return *reply;
 }
 
 auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env,
