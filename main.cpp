@@ -269,7 +269,7 @@ public:
             auto message = std::format("Sample {} failed by {}", endpoint, res.error());
             co_return;
         }
-        if (res->empty()) {
+        if (res->samples.empty()) {
             ui.statusbar->showMessage("Sample failed", 5);
             auto             message = std::format("No Message sampled from {}", endpoint);
             QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
@@ -279,7 +279,7 @@ public:
             item->setData((int)CopyableDataFlag::TextMap, map);
             ui.logWidget->addItem(item);
         }
-        for (auto &hash : *res) {
+        for (auto &hash : res->samples) {
             ui.statusbar->showMessage("Sample success", 5);
             auto             message = std::format("Sample {} success, hash {}", endpoint, hash);
             QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));

@@ -108,10 +108,10 @@ public:
      * @brief Get the sample info hashes from the routing table
      *
      * @param nodeIp The node ip to sample
-     * @return IoTask<std::vector<InfoHash> >  The sampled info hashes
+     * @param target The target id to find (see the sample_info_hash request in bep)
+     * @return IoTask<SampleInfoHashesReply>  The sampled info hashes
      */
-    auto sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vector<InfoHash>>;
-    auto sample(const IPEndpoint &ndeIp) -> IoTask<SampleInfoHashesReply>;
+    auto sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target = NodeId::rand()) -> IoTask<SampleInfoHashesReply>;
 
     /**
      * @brief Process the udp input from the socket

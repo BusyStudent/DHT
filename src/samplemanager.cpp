@@ -78,7 +78,7 @@ auto SampleManager::autoSample() -> Task<void> {
             if (node.timeout - dtime <= 0) {
                 scope.spawn([&node, &nextTime, this]() -> Task<> {
                     DHT_LOG("Sample {}", node.endpoint);
-                    auto res = co_await mSession.sample(node.endpoint);
+                    auto res = co_await mSession.sampleInfoHashes(node.endpoint);
                     if (!res) {
                         if (node.status == SampleNode::BlackList || node.status == SampleNode::Retry) {
                             node.timeout = 6 * 60 * 60;

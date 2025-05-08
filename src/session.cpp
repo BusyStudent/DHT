@@ -334,25 +334,8 @@ auto DhtSession::setSkipBootstrap(bool skip) -> void {
     mSkipBootstrap = skip;
 }
 
-auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp) -> IoTask<std::vector<InfoHash>> {
-    SampleInfoHashesQuery query {.transId = allocateTransactionId(), .id = mId, .target = NodeId::rand()};
-    auto                  res = co_await sendKrpc(query.toMessage(), nodeIp);
-    if (!res) {
-        co_return unexpected(res.error());
-    }
-    auto &[message, from] = *res;
-    if (isErrorMessage(message)) {
-        co_return unexpected(KrpcError::RpcErrorMessage);
-    }
-    auto reply = SampleInfoHashesReply::fromMessage(message);
-    if (!reply) {
-        co_return unexpected(KrpcError::BadReply);
-    }
-    co_return reply->samples;
-}
-
-auto DhtSession::sample(const IPEndpoint &nodeIp) -> IoTask<SampleInfoHashesReply> {
-    SampleInfoHashesQuery query {.transId = allocateTransactionId(), .id = mId, .target = NodeId::rand()};
+auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target) -> IoTask<SampleInfoHashesReply> {
+    SampleInfoHashesQuery query {.transId = allocateTransactionId(), .id = mId, .target = target};
     auto                  res = co_await sendKrpc(query.toMessage(), nodeIp);
     if (!res) {
         co_return unexpected(res.error());
@@ -577,12 +560,16 @@ auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
         DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
         co_return unexpected(res.error());
     }
-    for (size_t i = 10; i < 150;
-         i += 20) { // Try 10, 40, 60, 80, 100, 120, 140, 150, walkthrough the whole address space
+    for (size_t i = 10; i < 150; i += 20) { 
+        // Try 10, 40, 60, 80, 100, 120, 140, 150, walkthrough the whole address space
         auto res = co_await findNode(mId.randWithDistance(i));
         if (!res) {
             DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
             co_return unexpected(res.error());
+        }
+        if (mRoutingTable.size() >= 100) {
+            DHT_LOG("Encough nodes, done it !");
+            break;
         }
     }
     mRoutingTable.dumpInfo();
