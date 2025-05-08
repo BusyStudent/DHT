@@ -485,7 +485,7 @@ QComboBox::drop-down:disabled {
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab">
        <attribute name="title">
@@ -663,6 +663,13 @@ QComboBox::drop-down:disabled {
                    </property>
                   </widget>
                  </item>
+                 <item row="1" column="1">
+                  <widget class="QCheckBox" name="randomDiffusionBox">
+                   <property name="text">
+                    <string>Random Diffusion</string>
+                   </property>
+                  </widget>
+                 </item>
                 </layout>
                </item>
               </layout>
@@ -770,6 +777,13 @@ QComboBox::drop-down:disabled {
                 <widget class="QPushButton" name="dumpPeersButton">
                  <property name="text">
                   <string>Dump Peers Anounced</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="dumpSampleTableButton">
+                 <property name="text">
+                  <string>Dump Sample Table</string>
                  </property>
                 </widget>
                </item>

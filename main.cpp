@@ -52,6 +52,7 @@ public:
         ui.algoComboBox->setCurrentIndex(0);
 
         ui.autoSampleBox->setDisabled(true);
+        ui.randomDiffusionBox->setDisabled(true);
 
         // Prepare fetcher
         mFetchManager.setOnFetched(
@@ -130,14 +131,29 @@ public:
             }
         });
 
+        connect(ui.dumpSampleTableButton, &QPushButton::clicked, this, [this]() {
+            if (!mSampleManager) {
+                return;
+            }
+            mSampleManager->dump();
+        });
+
         connect(ui.autoSampleBox, &QCheckBox::clicked, this, [this](bool checked) -> QAsyncSlot<> {
             if (mSampleManager != nullptr) {
                 if (checked) {
+                    ui.randomDiffusionBox->setDisabled(false);
                     co_await mSampleManager->start();
                 }
                 else {
+                    ui.randomDiffusionBox->setDisabled(true);
                     co_await mSampleManager->stop();
                 }
+            }
+        });
+
+        connect(ui.randomDiffusionBox, &QCheckBox::clicked, this, [this](bool checked) -> void {
+            if (mSampleManager != nullptr) {
+                mSampleManager->setRandomDiffusion(checked);
             }
         });
 
@@ -183,9 +199,11 @@ public:
         mScope.spawn(&DhtSession::start, &*mSession);
         mSampleManager = std::make_unique<SampleManager>(mSession.value());
         mSampleManager->setOnInfoHashs([this](const std::vector<InfoHash> &infohashs) {
+            int count = 0;
             for (const auto &hash : infohashs) {
-                onHashFound(hash);
+                count += onHashFound(hash);
             }
+            return count;
         });
 #endif
     }
@@ -369,14 +387,16 @@ public:
         }
     }
 
-    auto onHashFound(const InfoHash &hash) -> void {
+    auto onHashFound(const InfoHash &hash) -> int {
         auto it = mHashs.find(hash);
         if (it == mHashs.end()) {
             mHashs.insert(hash);
             QListWidgetItem *item = new QListWidgetItem(QString::fromStdString(hash.toHex()));
             item->setData((int)CopyableDataFlag::Hash, QString::fromStdString(hash.toHex()));
             ui.infoHashWidget->addItem(item);
+            return 1;
         }
+        return 0;
     }
 
 private:
