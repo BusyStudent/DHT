@@ -55,23 +55,21 @@ private:
 };
 
 template <>
-struct std::formatter<SampleManager::SampleNode::Status, char> : std::formatter<std::string, char> {
+struct std::formatter<SampleManager::SampleNode::Status> {
     template <class ParseContext>
     constexpr ParseContext::iterator parse(ParseContext &ctx) {
-        return std::formatter<std::string, char>::parse(ctx);
+        return ctx.begin();
     }
 
     template <class FmtContext>
     FmtContext::iterator format(SampleManager::SampleNode::Status s, FmtContext &ctx) const {
+        std::string_view sv;
         switch (s) {
-            case SampleManager::SampleNode::NoStatus:
-                return std::formatter<std::string, char>::format("NoStatus", ctx);
-            case SampleManager::SampleNode::Retry:
-                return std::formatter<std::string, char>::format("Retry", ctx);
-            case SampleManager::SampleNode::BlackList:
-                return std::formatter<std::string, char>::format("BlackList", ctx);
-            default:
-                return std::formatter<std::string, char>::format("Unknown", ctx);
+            case SampleManager::SampleNode::NoStatus: sv = "NoStatus"; break;
+            case SampleManager::SampleNode::Retry: sv = "Retry"; break;
+            case SampleManager::SampleNode::BlackList: sv = "BlackList"; break;
+            default: sv = "Unknown"; break;
         }
+        return std::format_to(ctx.out(), "{}", sv);
     }
 };
