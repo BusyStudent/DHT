@@ -31,7 +31,7 @@
 
 #pragma comment(linker, "/SUBSYSTEM:console")
 
-template <typename ...Args>
+template <typename... Args>
 auto qFormat(std::format_string<Args...> fmt, Args &&...args) -> QString {
     return QString::fromUtf8(std::format(fmt, std::forward<Args>(args)...));
 }
@@ -151,6 +151,11 @@ public:
             }
         });
 
+        connect(ui.sampleRefreshButton, &QPushButton::clicked, this, [this]() {
+            ui.sampleRefreshButton->setDisabled(true);
+            QMetaObject::invokeMethod(this, &App::refleshSampleTableWidget, Qt::ConnectionType::QueuedConnection);
+        });
+
         // Try Load config
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
@@ -242,6 +247,69 @@ public:
         }
     }
 
+    auto refleshSampleTableWidget() -> void {
+        if (mSampleManager != nullptr) {
+            auto sampleNodes = mSampleManager->getSampleNodes();
+            ui.sampleNodeTableWidget->clearContents(); // Clear existing data but not headers
+            ui.sampleNodeTableWidget->setRowCount(0);  // Reset row count
+
+            QStringList headers = {"IpEndpoint", "Status", "Timeout", "Hashs", "Success", "Failure"};
+            ui.sampleNodeTableWidget->setColumnCount(headers.size());
+            ui.sampleNodeTableWidget->setHorizontalHeaderLabels(headers);
+            ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::Stretch);
+            ui.sampleNodeTableWidget->horizontalHeader()->setMinimumSectionSize(100);
+
+            int row = 0;
+            for (auto &node : sampleNodes) {
+                ui.sampleNodeTableWidget->insertRow(row);
+
+                QTableWidgetItem *ipItem = new QTableWidgetItem(QString::fromStdString(node.endpoint.toString()));
+                QTableWidgetItem *statusItem =
+                    new QTableWidgetItem(QString::fromStdString(std::format("{}", node.status)));
+                QTableWidgetItem *timeoutItem = new QTableWidgetItem(QString::number(node.timeout));
+                QTableWidgetItem *hashsItem   = new QTableWidgetItem(QString::number(node.hashsCount));
+                QTableWidgetItem *successItem = new QTableWidgetItem(QString::number(node.successCount));
+                QTableWidgetItem *failureItem = new QTableWidgetItem(QString::number(node.failureCount));
+
+                // no edit
+                ipItem->setFlags(ipItem->flags() & ~Qt::ItemIsEditable);
+                statusItem->setFlags(statusItem->flags() & ~Qt::ItemIsEditable);
+                timeoutItem->setFlags(timeoutItem->flags() & ~Qt::ItemIsEditable);
+                hashsItem->setFlags(hashsItem->flags() & ~Qt::ItemIsEditable);
+
+                // Optional: Align numbers to the right
+                timeoutItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                hashsItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                successItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                failureItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+                ui.sampleNodeTableWidget->setItem(row, 0, ipItem);
+                ui.sampleNodeTableWidget->setItem(row, 1, statusItem);
+                ui.sampleNodeTableWidget->setItem(row, 2, timeoutItem);
+                ui.sampleNodeTableWidget->setItem(row, 3, hashsItem);
+                ui.sampleNodeTableWidget->setItem(row, 4, successItem);
+                ui.sampleNodeTableWidget->setItem(row, 5, failureItem);
+                row++;
+            }
+            ui.sampleNodeTableWidget->resizeColumnsToContents();
+            // Optional: Stretch the first column (IpEndpoint) if space allows
+            if (ui.sampleNodeTableWidget->columnCount() > 0) {
+                ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+                for (int i = 1; i < ui.sampleNodeTableWidget->columnCount(); ++i) {
+                    ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(i,
+                                                                                       QHeaderView::ResizeToContents);
+                }
+            }
+
+            auto excludeIps = mSampleManager->excludeIpEndpoints();
+            ui.excludeIpListWidget->clear();
+            for (auto &ip : excludeIps) {
+                ui.excludeIpListWidget->addItem(QString::fromStdString(ip.toString()));
+            }
+        }
+        ui.sampleRefreshButton->setEnabled(true);
+    }
+
     auto onRandFindNodeButtonClikced() -> QAsyncSlot<void> {
         auto text = NodeId::rand().toHex();
         ui.findNodeEdit->setText(QString::fromUtf8(text));
@@ -322,7 +390,7 @@ public:
             auto message = qFormat("GetPeers {} success, hash {}, but no peers found", endpoint, infoHash);
             ui.logWidget->addItem(message);
             for (auto &node : res->nodes) {
-                QListWidgetItem *item    = new QListWidgetItem(qFormat("node {} endpoint {}", node.id, node.ip));
+                QListWidgetItem *item = new QListWidgetItem(qFormat("node {} endpoint {}", node.id, node.ip));
                 QVariantMap      map;
                 map.insert("copy endpoint", QString::fromUtf8(node.ip.toString()));
                 map.insert("copy id", QString::fromUtf8(node.id.toHex()));
@@ -332,10 +400,11 @@ public:
             co_return;
         }
         else {
-            auto message = qFormat("GetPeers {} success, hash {}, got {} peers", endpoint, infoHash, res->values.size());
+            auto message =
+                qFormat("GetPeers {} success, hash {}, got {} peers", endpoint, infoHash, res->values.size());
             ui.logWidget->addItem(message);
             for (auto &peer : res->values) {
-                QListWidgetItem *item    = new QListWidgetItem(qFormat("peer {}", peer));
+                QListWidgetItem *item = new QListWidgetItem(qFormat("peer {}", peer));
                 QVariantMap      map;
                 map.insert("copy endpoint", QString::fromUtf8(peer.toString()));
                 item->setData((int)CopyableDataFlag::TextMap, map);

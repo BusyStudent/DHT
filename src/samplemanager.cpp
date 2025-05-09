@@ -15,12 +15,14 @@ SampleManager::~SampleManager() {
     mTaskScope.wait();
 }
 
-void SampleManager::addSampleIpEndpoint(const IPEndpoint &endpoint) {
+bool SampleManager::addSampleIpEndpoint(const IPEndpoint &endpoint) {
     if (mIpEndpoints.find(endpoint) == mIpEndpoints.end()) {
         mIpEndpoints.insert(endpoint);
         mSampleNodes.emplace(endpoint, SampleNode {.endpoint = endpoint, .timeout = -1});
         mSampleEvent.set();
+        return true;
     }
+    return false;
 }
 
 void SampleManager::removeSample(const IPEndpoint &endpoint) {
@@ -73,11 +75,9 @@ void SampleManager::excludeIpEndpoint(const IPEndpoint &endpoint) {
 }
 
 auto SampleManager::start() -> Task<> {
-    mAutoSample      = true;
-    mRandomDiffusion = true;
+    mAutoSample = true;
     mSampleEvent.set();
     mTaskScope.spawn(autoSample());
-    mTaskScope.spawn(randomDiffusion());
     co_return;
 }
 
@@ -94,50 +94,58 @@ void SampleManager::setOnInfoHashs(std::function<int(const std::vector<InfoHash>
 }
 
 void SampleManager::setRandomDiffusion(bool enable) {
-    if (enable) {
-        mRandomDiffusionEvent.set();
-    }
-    else {
-        mRandomDiffusionEvent.clear();
-    }
+    mRandomDiffusion = enable;
+    mSampleEvent.set();
 }
 
 void SampleManager::dump() {
+    // Define column widths
+    const int IP_WIDTH      = 48; // Increased for IPv6
+    const int STATUS_WIDTH  = 10;
+    const int TIMEOUT_WIDTH = 8;  // Right-aligned
+    const int COUNT_WIDTH   = 12; // Right-aligned (for Hashs, Success, Failure)
+
     DHT_LOG("SampleManager dump:");
     DHT_LOG("  AutoSample: {}", mAutoSample);
-    DHT_LOG("  RandomDiffusion: {}", mRandomDiffusionEvent.isSet() && mRandomDiffusion);
+    DHT_LOG("  RandomDiffusion: {}", mRandomDiffusion);
     DHT_LOG("Sample Nodes:");
-    DHT_LOG("  IpEndpoint Status Timeout SuccessCount FailureCount");
+    DHT_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "IpEndpoint", IP_WIDTH, "Status", STATUS_WIDTH,
+            "Timeout", TIMEOUT_WIDTH, "HashsCount", COUNT_WIDTH, "SuccessCount", COUNT_WIDTH, "FailureCount",
+            COUNT_WIDTH);
+    DHT_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "---------", IP_WIDTH, "------", STATUS_WIDTH,
+            "-------", TIMEOUT_WIDTH, "---------", COUNT_WIDTH, "----------", COUNT_WIDTH, "----------", COUNT_WIDTH);
     for (const auto &[ip, node] : mSampleNodes) {
-        DHT_LOG("  {} {} {} {} {}", ip, node.status, node.timeout, node.successCount, node.failureCount);
+        DHT_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", ip.toString(), IP_WIDTH, node.status,
+                STATUS_WIDTH, node.timeout, TIMEOUT_WIDTH, node.hashsCount, COUNT_WIDTH, node.successCount, COUNT_WIDTH,
+                node.failureCount, COUNT_WIDTH);
     }
     DHT_LOG("exclude IpEndpoints:");
-    DHT_LOG("  IpEndpoint");
-    for (const auto &ip : excludeIpEndpoints()) {
-        DHT_LOG("  {}", ip);
+    DHT_LOG("  | IpEndpoint");
+    DHT_LOG("  | ---------");
+    auto excludeIps = excludeIpEndpoints();
+    for (const auto &ip : excludeIps) {
+        DHT_LOG("  | {}", ip);
     }
+    DHT_LOG("total: sample nodes {}, exclude ip endpoints {}", mSampleNodes.size(), excludeIps.size());
 }
 
-auto SampleManager::randomDiffusion() -> Task<void> {
-    while (mRandomDiffusion) {
-        if (auto ret = co_await mRandomDiffusionEvent; !ret) {
-            break;
-        }
-        auto id  = NodeId::rand();
-        auto res = co_await mSession.findNode(id, DhtSession::FindAlgo::AStar);
-        if (res) {
-            for (auto &node : *res) {
-                addSampleIpEndpoint(node.ip);
-            }
-        }
-        co_await sleep(std::chrono::seconds(10));
+auto SampleManager::randomDiffusion(int &nextTime) -> Task<void> {
+    auto id  = NodeId::rand();
+    auto res = co_await mSession.findNode(id, DhtSession::FindAlgo::AStar);
+    if (!res) {
+        DHT_LOG("Failed to random diffusion, error: {}", res.error());
+        co_return;
     }
-    co_return;
+    for (auto &node : *res) {
+        if (addSampleIpEndpoint(node.ip)) {
+            nextTime = 0;
+        }
+    }
 }
 
 auto SampleManager::sample(SampleNode node, int &nextTime) -> Task<> {
     DHT_LOG("Sample {}", node.endpoint);
-    auto res = co_await mSession.sampleInfoHashes(node.endpoint);
+    auto res = co_await mSession.sampleInfoHashes(node.endpoint, NodeId::rand());
     if (!res) {
         if (node.status == SampleNode::BlackList || node.status == SampleNode::Retry) {
             node.timeout = 6 * 60 * 60;
@@ -163,9 +171,19 @@ auto SampleManager::sample(SampleNode node, int &nextTime) -> Task<> {
         node.timeout = std::clamp(res->interval, res->samples.size() < res->num ? 10 * 60 : 60 * 60,
                                   6 * 60 * 60); // at least 10 min, at most 6 hours
         node.successCount++;
-        node.status = SampleNode::NoStatus;
+        node.status      = SampleNode::NoStatus;
+        int newHashCount = 0;
         if (mOnInfoHashs) {
-            node.hashsCount += mOnInfoHashs(res->samples);
+            newHashCount += mOnInfoHashs(res->samples);
+            if (newHashCount == 0) {
+                node.timeout = 6 * 60 * 60;
+            }
+        }
+        node.hashsCount += newHashCount;
+        if (mRandomDiffusion) {
+            for (auto &hash : res->nodes) {
+                addSampleIpEndpoint(hash.ip);
+            }
         }
     }
     nextTime = std::min(nextTime, node.timeout);
@@ -176,7 +194,7 @@ auto SampleManager::sample(SampleNode node, int &nextTime) -> Task<> {
 
 auto SampleManager::autoSample() -> Task<void> {
     while (mAutoSample) {
-        while (mIpEndpoints.size() == 0) {
+        if (mIpEndpoints.size() == 0) {
             mSampleEvent.clear();
             if (auto ret = co_await mSampleEvent; !ret) {
                 break;
@@ -191,11 +209,11 @@ auto SampleManager::autoSample() -> Task<void> {
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count() -
             mLastSampleTime;
-        int nextTime = 6 * 60 * 60;
-        DHT_LOG("Sample nodes: {}, dtime: {}", mSampleNodes.size(), dtime);
+        int       nextTime = 6 * 60 * 60;
         TaskScope scope;
+        DHT_LOG("Sample nodes: {}, dtime: {}", mSampleNodes.size(), dtime);
         for (auto it = mSampleNodes.begin(); it != mSampleNodes.end();) {
-            auto node = it->second;
+            auto &node = it->second;
             if (node.failureCount > 10) {
                 it = mSampleNodes.erase(it);
                 continue;
@@ -211,11 +229,19 @@ auto SampleManager::autoSample() -> Task<void> {
                 nextTime = std::min(nextTime, node.timeout);
             }
         }
-        co_await scope;
+        if (scope.runningTasks()) {
+            co_await scope;
+        }
+        else if (mRandomDiffusion) {
+            co_await randomDiffusion(nextTime);
+        }
         mLastSampleTime =
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count();
         if (mAutoSample) {
+            if (mRandomDiffusion) {
+                nextTime = std::min(nextTime, 5 * 60);
+            }
             mSampleEvent.clear();
             co_await whenAny(sleep(std::chrono::milliseconds(nextTime * 1000 + 50)), mSampleEvent);
         }

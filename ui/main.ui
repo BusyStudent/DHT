@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1447</width>
-    <height>1153</height>
+    <width>1211</width>
+    <height>715</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -466,10 +466,91 @@ QComboBox::down-arrow:disabled {
 
 QComboBox::drop-down:disabled {
     border-left-color: #c1c5ca;
-}</string>
+}
+/* === Table Widget Styles === */
+QTableWidget {
+    background-color: #ffffff;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    gridline-color: #e1e4e8;
+    outline: none;
+    alternate-background-color: #f8f9fa;
+    selection-background-color: #0366d6;
+    selection-color: #ffffff;
+}
+
+/* Header Styling (Horizontal and Vertical) */
+QHeaderView::section {
+    background-color: #f0f2f5;
+    color: #333333;
+    border-style: none;
+    border-bottom: 1px solid #d1d5da;
+    border-right: 1px solid #d1d5da;
+    min-height: 24px;             /* MODIFIED: Slightly reduced min-height */
+}
+
+QHeaderView::section:horizontal {
+    border-top: none;
+}
+
+QHeaderView::section:vertical {
+    border-left: none;
+}
+
+QHeaderView::section:horizontal:last {
+    border-right: none;
+}
+
+QHeaderView::section:vertical:last {
+    border-bottom: none;
+}
+
+/* Sort indicator arrows (remains the same) */
+QHeaderView::down-arrow {
+    border-style: solid;
+    border-width: 5px;
+    border-color: #555555 transparent transparent transparent;
+    width: 0px;
+    height: 0px;
+    margin-left: 5px;
+    position: relative;
+    top: 2px;
+}
+
+QHeaderView::up-arrow {
+    border-style: solid;
+    border-width: 5px;
+    border-color: transparent transparent #555555 transparent;
+    width: 0px;
+    height: 0px;
+    margin-left: 5px;
+    position: relative;
+    top: -3px;
+}
+
+
+/* Table Item Styling */
+QTableWidget::item {
+    padding: 3px 5px;        /* MODIFIED: Reduced padding */
+    background-color: transparent;
+    color: #333333;
+    border: none;
+}
+
+QTableWidget::item:selected {
+    background-color: #0366d6;
+    color: #ffffff;
+}
+
+QTableWidget::item:selected:!active {
+    background-color: #d1d5da;
+    color: #333333;
+}
+
+/* ... rest of the table styles (corner button, disabled state) remain the same ... */</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout">
+   <layout class="QVBoxLayout" name="verticalLayout_6">
     <property name="leftMargin">
      <number>0</number>
     </property>
@@ -684,6 +765,18 @@ QComboBox::drop-down:disabled {
                <string>Debug</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
                <item>
                 <layout class="QHBoxLayout" name="horizontalLayout_2">
                  <item>
@@ -959,6 +1052,56 @@ QComboBox::drop-down:disabled {
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="tab_5">
+       <attribute name="title">
+        <string>Sample</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QSplitter" name="splitter_2">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="handleWidth">
+           <number>1</number>
+          </property>
+          <widget class="QTableWidget" name="sampleNodeTableWidget"/>
+          <widget class="QWidget" name="verticalLayoutWidget_2">
+           <layout class="QVBoxLayout" name="verticalLayout_7">
+            <item>
+             <widget class="QPushButton" name="sampleRefreshButton">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>refresh</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QListWidget" name="excludeIpListWidget"/>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -968,7 +1111,7 @@ QComboBox::drop-down:disabled {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1447</width>
+     <width>1211</width>
      <height>23</height>
     </rect>
    </property>
