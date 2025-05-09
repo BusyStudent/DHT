@@ -50,8 +50,8 @@ auto Torrent::files() const -> std::vector<File> {
 
 auto Torrent::infoHash() const -> InfoHash { 
     auto encoded = mDict["info"].encode();
-    char sha1[20];
-    ::SHA1(sha1, encoded.data(), encoded.length());
+    unsigned char sha1[20];
+    ::SHA1(sha1, reinterpret_cast<unsigned char *>(encoded.data()), encoded.length());
     return InfoHash::from(sha1, sizeof(sha1));
 }
 

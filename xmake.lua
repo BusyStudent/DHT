@@ -24,6 +24,14 @@ target("test")
     add_files("src/*.c")
     add_files("test.cpp")
 
+target("test_bloomfilter")
+    set_default(false)
+    add_tests("default")
+    add_packages("gtest", "ilias")
+    set_kind("binary")
+    add_files("src/*.c")
+    add_files("test_bloomfilter.cpp")
+
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --

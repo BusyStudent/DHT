@@ -40,9 +40,8 @@ void SHA1Final(
     SHA1_CTX * context
     );
 
-void SHA1(
-    char *hash_out,
-    const char *str,
+void SHA1(unsigned char *hash_out, // Use unsigned char for output
+    const unsigned char *data, // Use unsigned char for input
     uint32_t len);
 
 #if defined(__cplusplus)

@@ -91,8 +91,8 @@ auto MetadataFetcher::fetch() -> IoTask<std::vector<std::byte> > {
         }
     }
     // Check hash
-    char sha1[20] = {0};
-    ::SHA1(sha1, reinterpret_cast<const char *>(metadata.data()), metadata.size());
+    unsigned char sha1[20] = {0};
+    ::SHA1(sha1, reinterpret_cast<const unsigned char *>(metadata.data()), metadata.size());
     if (::memcmp(sha1, &mHash, 20) != 0) {
         BT_LOG("Metadata hash is not equal to the infohash, expect {}, got {}", mHash, InfoHash::from(sha1, sizeof(sha1)));
         co_return unexpected(Error::Unknown);
