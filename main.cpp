@@ -26,22 +26,15 @@
 
 #if __cpp_lib_stacktrace
 #include <stacktrace>
+#include <iostream>
 #endif
 
 #pragma comment(linker, "/SUBSYSTEM:console")
 
-struct SampleNode {
-    enum Status {
-        NoStatus,
-        Retry,
-        BlackList,
-    };
-    IPEndpoint endpoint = {};
-    int        timeout  = -1; // The time in seconds the client should wait before sampleing the node
-    Status     status   = NoStatus;
-
-    auto operator<=>(const SampleNode &rhs) const { return timeout <=> rhs.timeout; }
-};
+template <typename ...Args>
+auto qFormat(std::format_string<Args...> fmt, Args &&...args) -> QString {
+    return QString::fromUtf8(std::format(fmt, std::forward<Args>(args)...));
+}
 
 class App final : public QMainWindow {
 public:
@@ -108,6 +101,7 @@ public:
         connect(ui.randFindNodeButton, &QPushButton::clicked, this, &App::onRandFindNodeButtonClikced);
 
         connect(ui.sampleButton, &QPushButton::clicked, this, &App::onSampleButtonClicked);
+        connect(ui.getPeersButton, &QPushButton::clicked, this, &App::onGetPeersButtonClicked);
 
         // Bt Peer Test part
         connect(ui.btConnectButton, &QPushButton::clicked, this, &App::onBtConnectButtonClicked);
@@ -239,12 +233,12 @@ public:
         }
         auto res = co_await mSession->ping(endpoint);
         if (!res) {
-            auto message = std::format("Ping {} failed by {}", endpoint, res.error());
-            ui.statusbar->showMessage(QString::fromUtf8(message));
+            auto message = qFormat("Ping {} failed by {}", endpoint, res.error());
+            ui.statusbar->showMessage(message, 5000);
         }
         else {
-            auto message = std::format("Ping {} success, peer id {}", endpoint, *res);
-            ui.statusbar->showMessage(QString::fromUtf8(message));
+            auto message = qFormat("Ping {} success, peer id {}", endpoint, *res);
+            ui.statusbar->showMessage(message, 5000);
         }
     }
 
@@ -257,17 +251,17 @@ public:
     auto onFindNodeButtonClicked() -> QAsyncSlot<void> {
         auto id = NodeId::fromHex(ui.findNodeEdit->text().toStdString().c_str());
         if (id == NodeId::zero()) {
-            ui.statusbar->showMessage("Invalid node id", 5);
+            ui.statusbar->showMessage("Invalid node id", 5000);
             co_return;
         }
         auto res = co_await mSession->findNode(id, (DhtSession::FindAlgo)ui.algoComboBox->currentIndex());
         if (res) {
             for (auto &node : *res) {
-                auto             str  = std::format("node {} at {}", node.id, node.ip);
-                QListWidgetItem *item = new QListWidgetItem(QString::fromUtf8(str));
+                auto             str  = qFormat("node {} at {}", node.id, node.ip);
+                QListWidgetItem *item = new QListWidgetItem(str);
                 QVariantMap      map;
-                map.insert("copy node id", QString::fromUtf8(node.id.toHex()));
-                map.insert("copy node ip", QString::fromStdString(node.ip.toString()));
+                map.insert("node id", QString::fromUtf8(node.id.toHex()));
+                map.insert("node ip", QString::fromStdString(node.ip.toString()));
                 item->setData((int)CopyableDataFlag::TextMap, map);
                 ui.logWidget->addItem(item);
             }
@@ -277,35 +271,76 @@ public:
     auto onSampleButtonClicked() -> QAsyncSlot<void> {
         IPEndpoint endpoint(ui.sampleEdit->text().toStdString().c_str());
         if (!endpoint.isValid()) {
-            ui.statusbar->showMessage("Invalid endpoint", 5);
+            ui.statusbar->showMessage("Invalid endpoint", 5000);
             co_return;
         }
         ui.statusbar->showMessage("Sample ...");
         auto res = co_await mSession->sampleInfoHashes(endpoint);
         if (!res) {
-            ui.statusbar->showMessage("Sample failed", 5);
-            auto message = std::format("Sample {} failed by {}", endpoint, res.error());
+            auto message = qFormat("Sample {} failed by {}", endpoint, res.error());
+            ui.statusbar->showMessage(message, 5000);
             co_return;
         }
         if (res->samples.empty()) {
-            ui.statusbar->showMessage("Sample failed", 5);
-            auto             message = std::format("No Message sampled from {}", endpoint);
-            QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
+            ui.statusbar->showMessage("Sample failed", 5000);
+            auto             message = qFormat("No Message sampled from {}", endpoint);
+            QListWidgetItem *item    = new QListWidgetItem(message);
             item->setBackground(Qt::red);
             QVariantMap map;
-            map.insert("copy endpoint", QString::fromStdString(endpoint.toString()));
+            map.insert("endpoint", QString::fromUtf8(endpoint.toString()));
             item->setData((int)CopyableDataFlag::TextMap, map);
             ui.logWidget->addItem(item);
         }
         for (auto &hash : res->samples) {
-            ui.statusbar->showMessage("Sample success", 5);
-            auto             message = std::format("Sample {} success, hash {}", endpoint, hash);
-            QListWidgetItem *item    = new QListWidgetItem(QString::fromUtf8(message));
+            ui.statusbar->showMessage("Sample success", 5000);
+            auto             message = qFormat("Sample {} success, hash {}", endpoint, hash);
+            QListWidgetItem *item    = new QListWidgetItem(message);
             QVariantMap      map;
-            map.insert("copy endpoint", QString::fromStdString(endpoint.toString()));
-            map.insert("copy hash", QString::fromStdString(hash.toHex()));
+            map.insert("endpoint", QString::fromUtf8(endpoint.toString()));
+            map.insert("hash", QString::fromUtf8(hash.toHex()));
             item->setData((int)CopyableDataFlag::TextMap, map);
             ui.logWidget->addItem(item);
+        }
+    }
+
+    auto onGetPeersButtonClicked() -> QAsyncSlot<void> {
+        auto endpoint = IPEndpoint(ui.getPeersIpEdit->text().toStdString().c_str());
+        auto infoHash = InfoHash::fromHex(ui.getPeersHashEdit->text().toStdString().c_str());
+        if (!endpoint.isValid() || infoHash == InfoHash::zero()) {
+            ui.statusbar->showMessage("Invalid endpoint or hash", 5000);
+            co_return;
+        }
+        ui.statusbar->showMessage("GetPeers ...");
+        auto res = co_await mSession->getPeers(endpoint, infoHash);
+        if (!res) {
+            auto message = qFormat("GetPeers {} by hash {} failed by {}", endpoint, infoHash, res.error());
+            ui.statusbar->showMessage(message, 5000);
+            co_return;
+        }
+        ui.statusbar->showMessage("GetPeers success", 5000);
+        if (res->values.empty()) {
+            auto message = qFormat("GetPeers {} success, hash {}, but no peers found", endpoint, infoHash);
+            ui.logWidget->addItem(message);
+            for (auto &node : res->nodes) {
+                QListWidgetItem *item    = new QListWidgetItem(qFormat("node {} endpoint {}", node.id, node.ip));
+                QVariantMap      map;
+                map.insert("copy endpoint", QString::fromUtf8(node.ip.toString()));
+                map.insert("copy id", QString::fromUtf8(node.id.toHex()));
+                item->setData((int)CopyableDataFlag::TextMap, map);
+                ui.logWidget->addItem(item);
+            }
+            co_return;
+        }
+        else {
+            auto message = qFormat("GetPeers {} success, hash {}, got {} peers", endpoint, infoHash, res->values.size());
+            ui.logWidget->addItem(message);
+            for (auto &peer : res->values) {
+                QListWidgetItem *item    = new QListWidgetItem(qFormat("peer {}", peer));
+                QVariantMap      map;
+                map.insert("copy endpoint", QString::fromUtf8(peer.toString()));
+                item->setData((int)CopyableDataFlag::TextMap, map);
+                ui.logWidget->addItem(item);
+            }
         }
     }
 
@@ -314,7 +349,7 @@ public:
         auto endpoint = IPEndpoint(ui.btIpEdit->text().toStdString().c_str());
         auto infoHash = InfoHash::fromHex(ui.btHashEdit->text().toStdString().c_str());
         if (!endpoint.isValid() || infoHash == InfoHash::zero()) {
-            ui.statusbar->showMessage("Invalid endpoint or hash", 5);
+            ui.statusbar->showMessage("Invalid endpoint or hash", 5000);
             co_return;
         }
 #if 0
@@ -345,7 +380,7 @@ public:
     auto onMetadataFetched(InfoHash hash, std::vector<std::byte> data) -> void {
         auto torrent = Torrent::parse(data);
         APP_LOG("Got torrent {}", hash);
-        auto items = ui.infoHashWidget->findItems(QString::fromStdString(hash.toHex()), Qt::MatchFixedString);
+        auto items = ui.infoHashWidget->findItems(QString::fromUtf8(hash.toHex()), Qt::MatchFixedString);
         for (auto item : items) {
             item->setText(QString::fromUtf8(torrent.name()));
         }
@@ -356,7 +391,7 @@ public:
         card->show();
 
         // Try save to file
-        auto  fileName = QString::fromStdString(hash.toHex()) + ".torrent";
+        auto  fileName = QString::fromUtf8(hash.toHex()) + ".torrent";
         QFile file("./torrents/" + fileName);
 
         if (file.open(QIODevice::WriteOnly)) {
@@ -368,10 +403,10 @@ public:
             for (auto item : items) {
                 item->setData((int)CopyableDataFlag::TorrentFile, absolutePath);
             }
-            ui.statusbar->showMessage(QString("Saved torrent to %1").arg(fileName), 5);
+            ui.statusbar->showMessage(QString("Saved torrent to %1").arg(fileName), 5000);
         }
         else {
-            ui.statusbar->showMessage(QString("Failed to save torrent to %1").arg(fileName), 5);
+            ui.statusbar->showMessage(QString("Failed to save torrent to %1").arg(fileName), 5000);
         }
     }
 

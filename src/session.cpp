@@ -351,6 +351,27 @@ auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target) -> Io
     co_return *reply;
 }
 
+auto DhtSession::getPeers(const IPEndpoint &endpoint, const InfoHash &target) -> IoTask<GetPeersReply> {
+    GetPeersQuery query {
+        .transId = allocateTransactionId(),
+        .id = mId,
+        .infoHash = target,
+    };
+    auto res = co_await sendKrpc(query.toMessage(), endpoint);
+    if (!res) {
+        co_return unexpected(res.error());
+    }
+    auto &[message, from] = *res;
+    if (isErrorMessage(message)) {
+        co_return unexpected(KrpcError::RpcErrorMessage);
+    }
+    auto reply = GetPeersReply::fromMessage(message);
+    if (!reply) {
+        co_return unexpected(KrpcError::BadReply);
+    }
+    co_return *reply;
+}
+
 auto DhtSession::aStarFind(const NodeId &target, std::optional<NodeId> id, const IPEndpoint &endpoint, FindNodeEnv &env,
                            int max_parallel, int max_step) -> IoTask<std::vector<NodeEndpoint>> {
     std::priority_queue<node_utils::AStarNode> openSet;

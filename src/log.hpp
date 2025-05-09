@@ -3,7 +3,14 @@
 #include <format>
 #include <cstdio>
 
-#define DO_LOG(mod, ...) ::fprintf(stderr, mod " %s\n", std::format(##__VA_ARGS__).c_str())
+#if defined(NDEBUG)
+#define DO_LOG(mod, fmt, ...) do {} while(0)
+#elif defined(__cpp_lib_print)
+#define DO_LOG(mod, fmt, ...) std::println(stderr, mod " " fmt, ##__VA_ARGS__)
+#include <print>
+#else
+#define DO_LOG(mod, fmt, ...) ::fprintf(stderr, mod " %s\n", std::format(fmt, ##__VA_ARGS__).c_str())
+#endif
 
 #ifndef DHT_LOG
 #define DHT_LOG(fmt, ...) DO_LOG("[DHT]", fmt, ##__VA_ARGS__)

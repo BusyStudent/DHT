@@ -17,10 +17,10 @@
 class DhtSession {
 public:
     enum FindAlgo {
-        AStar = 0,
-        BfsDfs,
+        AStar  = 0,
+        BfsDfs = 1,
+        Dfs    = 2,
     };
-
 public:
     DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client);
     ~DhtSession();
@@ -105,13 +105,24 @@ public:
     auto setSkipBootstrap(bool skip) -> void;
 
     /**
-     * @brief Get the sample info hashes from the routing table
+     * @brief Sample info hashes from the given node
      *
      * @param nodeIp The node ip to sample
      * @param target The target id to find (see the sample_info_hash request in bep)
      * @return IoTask<SampleInfoHashesReply>  The sampled info hashes
      */
     auto sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target = NodeId::rand()) -> IoTask<SampleInfoHashesReply>;
+
+    /**
+     * @brief Get the Peers from the remote tagrte
+     * 
+     * @param endpoint 
+     * @param target 
+     * @return IoTask<GetPeersReply> 
+     */
+    auto getPeers(const IPEndpoint &endpoint, const InfoHash &target)  -> IoTask<GetPeersReply>;
+
+    auto getPeers(const InfoHash &target);
 
     /**
      * @brief Process the udp input from the socket

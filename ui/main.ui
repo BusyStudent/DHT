@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>972</width>
-    <height>631</height>
+    <width>1447</width>
+    <height>1153</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -684,18 +684,6 @@ QComboBox::drop-down:disabled {
                <string>Debug</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout">
-               <property name="leftMargin">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>0</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
                <item>
                 <layout class="QHBoxLayout" name="horizontalLayout_2">
                  <item>
@@ -761,6 +749,37 @@ QComboBox::drop-down:disabled {
                   <widget class="QPushButton" name="sampleButton">
                    <property name="text">
                     <string>Sample</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="horizontalLayout_9">
+                 <item>
+                  <widget class="QLabel" name="label_8">
+                   <property name="text">
+                    <string>NodeIp:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="getPeersIpEdit"/>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="label_9">
+                   <property name="text">
+                    <string>InfoHash:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="getPeersHashEdit"/>
+                 </item>
+                 <item>
+                  <widget class="QPushButton" name="getPeersButton">
+                   <property name="text">
+                    <string>GetPeers</string>
                    </property>
                   </widget>
                  </item>
@@ -949,7 +968,7 @@ QComboBox::drop-down:disabled {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>972</width>
+     <width>1447</width>
      <height>23</height>
     </rect>
    </property>
