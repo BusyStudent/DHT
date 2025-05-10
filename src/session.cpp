@@ -1,5 +1,7 @@
 #include <ilias/task.hpp>
+#include <ilias/task/when_all.hpp>
 #include <random>
+
 #include "session.hpp"
 
 using namespace std::literals;
@@ -38,6 +40,7 @@ struct AStarNode {
 DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client)
     : mCtxt(ctxt), mScope(ctxt), mClient(client), mEndpoint(client.localEndpoint().value()), mId(id),
       mRoutingTable(id) {
+    mRandomSearch.set();
 }
 
 DhtSession::~DhtSession() {
@@ -51,21 +54,24 @@ auto DhtSession::start() -> Task<void> {
                                  std::pair {"router.utorrent.com", "6881"}};
     if (!mSkipBootstrap) {
         bool booststraped = false;
-        for (const auto [host, port] : bootstrapNodes) {
-            addrinfo_t hints {.ai_family = mEndpoint.family()};
-            auto       info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
-            if (!info) {
-                DHT_LOG("Failed to get the addrinfo of {}:{} => {}", host, port, info.error());
-                continue;
-            }
-            for (auto &endpoint : info->endpoints()) {
-                if (auto ret = co_await bootstrap(endpoint); ret) {
-                    booststraped = true;
-                    break;
+        while (!booststraped) {
+            for (const auto [host, port] : bootstrapNodes) {
+                addrinfo_t hints {.ai_family = mEndpoint.family()};
+                auto       info = co_await AddressInfo::fromHostnameAsync(host, port, hints);
+                if (!info) {
+                    if (info.error() == Error::Canceled) {
+                        co_return;
+                    }
+                    DHT_LOG("Failed to get the addrinfo of {}:{} => {}", host, port, info.error());
+                    continue;
                 }
-            }
-            if (booststraped) {
-                break;
+                for (auto &endpoint : info->endpoints()) {
+                    if (auto ret = co_await bootstrap(endpoint); ret) {
+                        booststraped = true;
+                        break;
+                    }
+                }
+                co_await sleep(std::chrono::minutes(5));
             }
         }
         if (!booststraped) {
@@ -73,6 +79,7 @@ auto DhtSession::start() -> Task<void> {
             co_return;
         }
     }
+
     // Do normal DHT management
     mScope.spawn(cleanupPeersThread());
     mScope.spawn(refreshTableThread());
@@ -334,6 +341,15 @@ auto DhtSession::setSkipBootstrap(bool skip) -> void {
     mSkipBootstrap = skip;
 }
 
+auto DhtSession::setRandomSearch(bool enable) -> void {
+    if (enable) {
+        mRandomSearch.set();
+    }
+    else {
+        mRandomSearch.clear();
+    }
+}
+
 auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target) -> IoTask<SampleInfoHashesReply> {
     SampleInfoHashesQuery query {.transId = allocateTransactionId(), .id = mId, .target = target};
     auto                  res = co_await sendKrpc(query.toMessage(), nodeIp);
@@ -353,8 +369,8 @@ auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target) -> Io
 
 auto DhtSession::getPeers(const IPEndpoint &endpoint, const InfoHash &target) -> IoTask<GetPeersReply> {
     GetPeersQuery query {
-        .transId = allocateTransactionId(),
-        .id = mId,
+        .transId  = allocateTransactionId(),
+        .id       = mId,
         .infoHash = target,
     };
     auto res = co_await sendKrpc(query.toMessage(), endpoint);
@@ -581,7 +597,7 @@ auto DhtSession::bootstrap(const IPEndpoint &nodeIp) -> IoTask<void> {
         DHT_LOG("Bootstrap to {} failed: {}", nodeIp, res.error());
         co_return unexpected(res.error());
     }
-    for (size_t i = 10; i < 150; i += 20) { 
+    for (size_t i = 10; i < 150; i += 20) {
         // Try 10, 40, 60, 80, 100, 120, 140, 150, walkthrough the whole address space
         auto res = co_await findNode(mId.randWithDistance(i));
         if (!res) {
@@ -682,7 +698,8 @@ auto DhtSession::refreshTableThread() -> Task<void> {
 
 auto DhtSession::randomSearchThread() -> Task<void> {
     while (true) {
-        if (auto res = co_await sleep(mRandomSearchInterval); !res) { // Do random search every 5 minutes
+        if (auto res = co_await whenAll(sleep(mRandomSearchInterval), mRandomSearch);
+            !std::get<0>(res) || !std::get<1>(res)) { // Do random search every 5 minutes
             DHT_LOG("DhtSession::randomSearchThread request quit");
             break;
         }

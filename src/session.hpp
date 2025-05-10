@@ -21,6 +21,7 @@ public:
         BfsDfs = 1,
         Dfs    = 2,
     };
+
 public:
     DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client);
     ~DhtSession();
@@ -105,6 +106,13 @@ public:
     auto setSkipBootstrap(bool skip) -> void;
 
     /**
+     * @brief enable/disable the random search
+     *
+     * @param enable
+     */
+    auto setRandomSearch(bool enable) -> void;
+
+    /**
      * @brief Sample info hashes from the given node
      *
      * @param nodeIp The node ip to sample
@@ -115,12 +123,12 @@ public:
 
     /**
      * @brief Get the Peers from the remote tagrte
-     * 
-     * @param endpoint 
-     * @param target 
-     * @return IoTask<GetPeersReply> 
+     *
+     * @param endpoint
+     * @param target
+     * @return IoTask<GetPeersReply>
      */
-    auto getPeers(const IPEndpoint &endpoint, const InfoHash &target)  -> IoTask<GetPeersReply>;
+    auto getPeers(const IPEndpoint &endpoint, const InfoHash &target) -> IoTask<GetPeersReply>;
 
     auto getPeers(const InfoHash &target);
 
@@ -244,7 +252,8 @@ private:
     std::function<void(const BenObject &message, const IPEndpoint &from)> mOnQuery; // The callback when we got a query
 
     // Config
-    bool mSkipBootstrap = false;
+    bool  mSkipBootstrap = false;
+    Event mRandomSearch;
 };
 
 enum class KrpcError {

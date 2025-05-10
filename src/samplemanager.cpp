@@ -104,6 +104,7 @@ void SampleManager::setOnInfoHashs(std::function<int(const std::vector<InfoHash>
 void SampleManager::setRandomDiffusion(bool enable) {
     mRandomDiffusion = enable;
     mSampleEvent.set();
+    mSession.setRandomSearch(!enable);
 }
 
 void SampleManager::dump() {
@@ -248,6 +249,7 @@ auto SampleManager::autoSample() -> Task<void> {
             if (mRandomDiffusion) {
                 nextTime = std::min(nextTime, (uint64_t)(RANDOM_DIFFUSION_INTERVAL));
             }
+            nextTime = std::max(0ULL, nextTime);
             mSampleEvent.clear();
             co_await whenAny(sleep(std::chrono::milliseconds(nextTime * 1000 + SAMPLE_EXECUTION_DELAY)), mSampleEvent);
         }
