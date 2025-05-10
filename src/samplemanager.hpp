@@ -11,11 +11,28 @@ public:
             BlackList,
         };
         IPEndpoint endpoint     = {};
-        int        timeout      = -1; // The time in seconds the client should wait before sampleing the node
+        uint64_t   timeout      = 0;
         Status     status       = NoStatus;
         int        successCount = 0;
         int        failureCount = 0;
         int        hashsCount   = 0;
+
+        bool operator<(const SampleNode &other) const {
+            if (endpoint != other.endpoint) {
+                if (timeout == other.timeout) {
+                    if (successCount == other.successCount) {
+                        return endpoint < other.endpoint;
+                    }
+                    return successCount > other.successCount;
+                }
+                return timeout < other.timeout;
+            }
+            else {
+                return false;
+            }
+        }
+
+        bool operator==(const SampleNode &other) const { return endpoint == other.endpoint; }
     };
 
 public:
@@ -35,20 +52,20 @@ public:
     void dump();
 
 private:
-    auto randomDiffusion(int &nextTime) -> Task<void>;
+    auto randomDiffusion(uint64_t &nextTime) -> Task<void>;
     auto autoSample() -> Task<void>;
-    auto sample(SampleNode node, int &nextTime) -> Task<>;
+    auto sample(SampleNode node, uint64_t &nextTime) -> Task<>;
     auto onQuery(const BenObject &object, const IPEndpoint &ipendpoint) -> void;
 
 private:
-    TaskScope                        mTaskScope;
-    DhtSession                      &mSession;
-    std::set<IPEndpoint>             mIpEndpoints;
-    int                              mLastSampleTime = 0;
-    Event                            mSampleEvent;
-    bool                             mAutoSample      = false;
-    bool                             mRandomDiffusion = true;
-    std::map<IPEndpoint, SampleNode> mSampleNodes;
+    TaskScope            mTaskScope;
+    DhtSession          &mSession;
+    uint64_t             mLastSampleTime = 0;
+    Event                mSampleEvent;
+    bool                 mAutoSample      = false;
+    bool                 mRandomDiffusion = true;
+    std::set<IPEndpoint> mIpEndpoints;
+    std::set<SampleNode> mSampleNodes;
 
     std::function<int(const std::vector<InfoHash> &)> mOnInfoHashs;
 };

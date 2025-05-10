@@ -252,12 +252,13 @@ public:
             auto sampleNodes = mSampleManager->getSampleNodes();
             ui.sampleNodeTableWidget->clearContents(); // Clear existing data but not headers
             ui.sampleNodeTableWidget->setRowCount(0);  // Reset row count
+            auto now =
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
+                    .count();
 
             QStringList headers = {"IpEndpoint", "Status", "Timeout", "Hashs", "Success", "Failure"};
             ui.sampleNodeTableWidget->setColumnCount(headers.size());
             ui.sampleNodeTableWidget->setHorizontalHeaderLabels(headers);
-            ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeMode::Stretch);
-            ui.sampleNodeTableWidget->horizontalHeader()->setMinimumSectionSize(100);
 
             int row = 0;
             for (auto &node : sampleNodes) {
@@ -266,7 +267,8 @@ public:
                 QTableWidgetItem *ipItem = new QTableWidgetItem(QString::fromStdString(node.endpoint.toString()));
                 QTableWidgetItem *statusItem =
                     new QTableWidgetItem(QString::fromStdString(std::format("{}", node.status)));
-                QTableWidgetItem *timeoutItem = new QTableWidgetItem(QString::number(node.timeout));
+                QTableWidgetItem *timeoutItem =
+                    new QTableWidgetItem(QString::number(std::max(0, (int)(node.timeout - now))));
                 QTableWidgetItem *hashsItem   = new QTableWidgetItem(QString::number(node.hashsCount));
                 QTableWidgetItem *successItem = new QTableWidgetItem(QString::number(node.successCount));
                 QTableWidgetItem *failureItem = new QTableWidgetItem(QString::number(node.failureCount));
@@ -294,11 +296,8 @@ public:
             ui.sampleNodeTableWidget->resizeColumnsToContents();
             // Optional: Stretch the first column (IpEndpoint) if space allows
             if (ui.sampleNodeTableWidget->columnCount() > 0) {
-                ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-                for (int i = 1; i < ui.sampleNodeTableWidget->columnCount(); ++i) {
-                    ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(i,
-                                                                                       QHeaderView::ResizeToContents);
-                }
+                ui.sampleNodeTableWidget->horizontalHeader()->setMinimumSectionSize(60);
+                ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
             }
 
             auto excludeIps = mSampleManager->excludeIpEndpoints();
