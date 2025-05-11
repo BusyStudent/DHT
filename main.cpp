@@ -50,9 +50,6 @@ public:
         // Prepare fetcher
         mFetchManager.setOnFetched(
             [this](InfoHash hash, std::vector<std::byte> data) { onMetadataFetched(hash, std::move(data)); });
-        // if (!QDir("./torrents").exists()) {
-        //     QDir("./").mkdir("torrents");
-        // }
         if (!std::filesystem::exists("./torrents")) {
             std::filesystem::create_directory("./torrents");
         }
@@ -236,6 +233,7 @@ public:
             ui.statusbar->showMessage("Invalid endpoint");
             co_return;
         }
+        ui.statusbar->showMessage("Ping ...");
         auto res = co_await mSession->ping(endpoint);
         if (!res) {
             auto message = qFormat("Ping {} failed by {}", endpoint, res.error());
@@ -266,7 +264,7 @@ public:
 
                 QTableWidgetItem *ipItem = new QTableWidgetItem(QString::fromStdString(node.endpoint.toString()));
                 QTableWidgetItem *statusItem =
-                    new QTableWidgetItem(QString::fromStdString(std::format("{}", node.status)));
+                    new QTableWidgetItem(qFormat("{}", node.status));
                 QTableWidgetItem *timeoutItem =
                     new QTableWidgetItem(QString::number(std::max(0, (int)(node.timeout - now))));
                 QTableWidgetItem *hashsItem   = new QTableWidgetItem(QString::number(node.hashsCount));

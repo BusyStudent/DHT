@@ -89,7 +89,7 @@ auto FetchManager::doFetch(InfoHash hash) -> Task<void> {
     mPending.erase(hash);
     mWorkers.erase(hash);
 
-    if (!self.cancellationToken().isCancellationRequested()) {
+    if (!self.isCancellationRequested()) {
         // No in cancel state?
         if (mScope.runningTasks() < mMaxCocurrent && mPending.size() > 0) {
             // Spawn a new worker to fetch the first hash

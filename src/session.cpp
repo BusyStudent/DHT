@@ -40,7 +40,7 @@ struct AStarNode {
 DhtSession::DhtSession(IoContext &ctxt, const NodeId &id, UdpClient &client)
     : mCtxt(ctxt), mScope(ctxt), mClient(client), mEndpoint(client.localEndpoint().value()), mId(id),
       mRoutingTable(id) {
-    mRandomSearch.set();
+
 }
 
 DhtSession::~DhtSession() {
@@ -52,6 +52,11 @@ auto DhtSession::start() -> Task<void> {
     const auto bootstrapNodes = {std::pair {"router.bittorrent.com", "6881"},
                                  std::pair {"dht.transmissionbt.com", "6881"},
                                  std::pair {"router.utorrent.com", "6881"}};
+    // Do normal DHT management
+    mScope.spawn(cleanupPeersThread());
+    mScope.spawn(refreshTableThread());
+    mScope.spawn(randomSearchThread());
+    // Begin Bootstrap !
     if (!mSkipBootstrap) {
         bool booststraped = false;
         while (!booststraped) {
@@ -71,19 +76,17 @@ auto DhtSession::start() -> Task<void> {
                         break;
                     }
                 }
+            }
+            if (!booststraped) {
+                if (!mRetryBootstrap) {
+                    co_return;
+                }
+                DHT_LOG("Failed to bootstrap, retry after 5 minutes");
                 co_await sleep(std::chrono::minutes(5));
             }
         }
-        if (!booststraped) {
-            DHT_LOG("Failed to bootstrap");
-            co_return;
-        }
     }
-
-    // Do normal DHT management
-    mScope.spawn(cleanupPeersThread());
-    mScope.spawn(refreshTableThread());
-    mScope.spawn(randomSearchThread());
+    DHT_LOG("All Bootstrap done");
     co_return;
 }
 
@@ -342,12 +345,7 @@ auto DhtSession::setSkipBootstrap(bool skip) -> void {
 }
 
 auto DhtSession::setRandomSearch(bool enable) -> void {
-    if (enable) {
-        mRandomSearch.set();
-    }
-    else {
-        mRandomSearch.clear();
-    }
+    mRandomSearch = enable;
 }
 
 auto DhtSession::sampleInfoHashes(const IPEndpoint &nodeIp, NodeId target) -> IoTask<SampleInfoHashesReply> {
@@ -698,10 +696,12 @@ auto DhtSession::refreshTableThread() -> Task<void> {
 
 auto DhtSession::randomSearchThread() -> Task<void> {
     while (true) {
-        if (auto res = co_await whenAll(sleep(mRandomSearchInterval), mRandomSearch);
-            !std::get<0>(res) || !std::get<1>(res)) { // Do random search every 5 minutes
+        if (auto res = co_await sleep(mRandomSearchInterval); !res) {
             DHT_LOG("DhtSession::randomSearchThread request quit");
             break;
+        }
+        if (!mRandomSearch) {
+            continue;
         }
         auto res = co_await findNode(NodeId::rand());
         if (!res && res.error() == Error::Canceled) {

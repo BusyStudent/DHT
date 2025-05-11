@@ -253,7 +253,8 @@ private:
 
     // Config
     bool  mSkipBootstrap = false;
-    Event mRandomSearch;
+    bool  mRetryBootstrap = true;
+    bool  mRandomSearch = true;
 };
 
 enum class KrpcError {

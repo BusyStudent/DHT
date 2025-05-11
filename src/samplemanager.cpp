@@ -258,5 +258,7 @@ auto SampleManager::autoSample() -> Task<void> {
 }
 
 auto SampleManager::onQuery(const BenObject &object, const IPEndpoint &ipendpoint) -> void {
-    addSampleIpEndpoint(ipendpoint);
+    if (mAutoSample) {
+        addSampleIpEndpoint(ipendpoint);
+    }
 }
