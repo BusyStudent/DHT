@@ -162,6 +162,45 @@ public:
             QMetaObject::invokeMethod(this, &App::refleshSampleTableWidget, Qt::ConnectionType::QueuedConnection);
         });
 
+        connect(ui.addExcludeIpButton, &QPushButton::clicked, this, [this]() {
+            auto text = ui.excludeIpLineEdit->text();
+            if (text.isEmpty()) {
+                return;
+            }
+            if (!mSampleManager) {
+                return;
+            }
+            if (auto ret = IPEndpoint::fromString(text.toStdString()); ret) {
+                mSampleManager->excludeIpEndpoint(ret.value());
+            }
+        });
+
+        connect(ui.addSampleIpButton, &QPushButton::clicked, this, [this]() {
+            auto text = ui.sampleIpLineEdit->text();
+            if (text.isEmpty()) {
+                return;
+            }
+            if (!mSampleManager) {
+                return;
+            }
+            if (auto ret = IPEndpoint::fromString(text.toStdString()); ret) {
+                mSampleManager->addSampleIpEndpoint(ret.value());
+            }
+        });
+
+        connect(ui.removeSampleIpButton, &QPushButton::clicked, this, [this]() {
+            auto text = ui.sampleIpLineEdit->text();
+            if (text.isEmpty()) {
+                return;
+            }
+            if (!mSampleManager) {
+                return;
+            }
+            if (auto ret = IPEndpoint::fromString(text.toStdString()); ret) {
+                mSampleManager->removeSample(ret.value());
+            }
+        });
+
         // Try Load config
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
@@ -193,7 +232,7 @@ public:
             onHashFound(hash);
             mFetchManager.addHash(hash, endpoint);
         });
-        mSession->routingTable().setOnNodeChanged([&, this]() { 
+        mSession->routingTable().setOnNodeChanged([&, this]() {
             setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size()));
             if (ui.tabWidget->currentWidget() == ui.kBucketTab) { // Refresh
                 // refleshKBucketWidget();
@@ -341,7 +380,7 @@ public:
                     new QTableWidgetItem(QString::number(std::max(0, (int)(node.timeout - now))) + "s");
                 QTableWidgetItem *hashsItem   = new QTableWidgetItem(QString::number(node.hashsCount));
                 QTableWidgetItem *successItem = new QTableWidgetItem(QString::number(node.successCount));
-                QTableWidgetItem *failureItem = new QTableWidgetItem(QString::number(node.failureCount));
+                QTableWidgetItem *failureItem = new QTableWidgetItem(QString::number(node.failure));
 
                 // no edit
                 ipItem->setFlags(ipItem->flags() & ~Qt::ItemIsEditable);

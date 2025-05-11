@@ -9,28 +9,14 @@ public:
             NoStatus,
             Retry,
             BlackList,
+            Sampling,
         };
         IPEndpoint endpoint     = {};
         uint64_t   timeout      = 0;
         Status     status       = NoStatus;
+        int        failure      = 0; // weight of failure
         int        successCount = 0;
-        int        failureCount = 0;
         int        hashsCount   = 0;
-
-        bool operator<(const SampleNode &other) const {
-            if (endpoint != other.endpoint) {
-                if (timeout == other.timeout) {
-                    if (successCount == other.successCount) {
-                        return endpoint < other.endpoint;
-                    }
-                    return successCount > other.successCount;
-                }
-                return timeout < other.timeout;
-            }
-            else {
-                return false;
-            }
-        }
 
         bool operator==(const SampleNode &other) const { return endpoint == other.endpoint; }
     };
@@ -54,19 +40,20 @@ public:
 private:
     auto randomDiffusion(uint64_t &nextTime) -> Task<void>;
     auto autoSample() -> Task<void>;
-    auto sample(SampleNode node, uint64_t &nextTime) -> Task<>;
+    auto sample(std::shared_ptr<SampleNode> node, uint64_t &nextTime) -> Task<>;
     auto onQuery(const BenObject &object, const IPEndpoint &ipendpoint) -> void;
 
 private:
-    TaskScope                                            mTaskScope;
-    DhtSession                                          &mSession;
-    uint64_t                                             mLastSampleTime = 0;
-    Event                                                mSampleEvent;
-    bool                                                 mAutoSample      = false;
-    bool                                                 mRandomDiffusion = true;
-    std::set<IPEndpoint>                                 mIpEndpoints;
-    std::set<SampleNode>                                 mSampleNodes;
-    std::map<IPEndpoint, std::set<SampleNode>::iterator> mIpEndpointToSampleNode;
+    TaskScope                                mTaskScope;
+    DhtSession                              &mSession;
+    uint64_t                                 mLastSampleTime = 0;
+    Event                                    mSampleEvent;
+    bool                                     mAutoSample      = false;
+    bool                                     mRandomDiffusion = true;
+    std::set<IPEndpoint>                     mIpEndpoints;
+    std::vector<std::shared_ptr<SampleNode>> mSampleNodes;
+    int                                      mSamplingCount = 0;
+    Event                                    mSamplingEvent;
 
     std::function<int(const std::vector<InfoHash> &)> mOnInfoHashs;
 };
@@ -103,6 +90,9 @@ public:
                 break;
             case SampleManager::SampleNode::BlackList:
                 sv = "BlackList";
+                break;
+            case SampleManager::SampleNode::Sampling:
+                sv = "Sampling";
                 break;
             default:
                 sv = "Unknown"; // Or SampleManager::SampleNode::UnknownStatus

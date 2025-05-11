@@ -566,7 +566,7 @@ QTableWidget::item:selected:!active {
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>4</number>
       </property>
       <widget class="QWidget" name="tab">
        <attribute name="title">
@@ -1128,6 +1128,47 @@ QTableWidget::item:selected:!active {
               </property>
               <property name="text">
                <string>refresh</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="sampleIpLineEdit"/>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_13">
+              <property name="bottomMargin">
+               <number>10</number>
+              </property>
+              <item>
+               <widget class="QPushButton" name="addSampleIpButton">
+                <property name="text">
+                 <string>add</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="removeSampleIpButton">
+                <property name="text">
+                 <string>remove</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="excludeIpLineEdit"/>
+            </item>
+            <item>
+             <widget class="QPushButton" name="addExcludeIpButton">
+              <property name="text">
+               <string>add exclude</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_12">
+              <property name="text">
+               <string>exclude IPs:</string>
               </property>
              </widget>
             </item>

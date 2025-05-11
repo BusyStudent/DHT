@@ -9,6 +9,7 @@
 #define RANDOM_DIFFUSION_INTERVAL (5 * 60) // 5 minutes
 #define SAMPLE_EXECUTION_DELAY 50          // 50 milliseconds
 #define MAX_ALLOWED_SAMPLE_FAILURES 10
+#define MAX_SAMPLE_TASKS 1000
 
 SampleManager::SampleManager(DhtSession &session) : mSession(session) {
     mSession.setOnQuery(std::bind(&SampleManager::onQuery, this, std::placeholders::_1, std::placeholders::_2));
@@ -26,8 +27,7 @@ SampleManager::~SampleManager() {
 bool SampleManager::addSampleIpEndpoint(const IPEndpoint &endpoint) {
     if (mIpEndpoints.find(endpoint) == mIpEndpoints.end()) {
         mIpEndpoints.insert(endpoint);
-        auto it = mSampleNodes.emplace_hint(mSampleNodes.begin(), SampleNode {.endpoint = endpoint});
-        mIpEndpointToSampleNode.insert(std::make_pair(endpoint, it));
+        mSampleNodes.emplace_back(std::make_shared<SampleNode>(SampleNode {.endpoint = endpoint}));
         mSampleEvent.set();
         return true;
     }
@@ -36,23 +36,22 @@ bool SampleManager::addSampleIpEndpoint(const IPEndpoint &endpoint) {
 
 void SampleManager::removeSample(const IPEndpoint &endpoint) {
     mIpEndpoints.erase(endpoint);
-    auto it = mIpEndpointToSampleNode.find(endpoint);
-    if (it != mIpEndpointToSampleNode.end()) {
-        mSampleNodes.erase(it->second);
-        mIpEndpointToSampleNode.erase(it);
+    if (auto it = std::find_if(mSampleNodes.begin(), mSampleNodes.end(),
+                               [&endpoint](const auto &node) { return node->endpoint == endpoint; });
+        it != mSampleNodes.end()) {
+        mSampleNodes.erase(it);
     }
 }
 
 void SampleManager::clearSamples() {
     mIpEndpoints.clear();
     mSampleNodes.clear();
-    mIpEndpointToSampleNode.clear();
 }
 
 auto SampleManager::getSampleIpEndpoints() const -> std::vector<IPEndpoint> {
     std::vector<IPEndpoint> ret;
     for (const auto &node : mSampleNodes) {
-        ret.push_back(node.endpoint);
+        ret.push_back(node->endpoint);
     }
     return ret;
 }
@@ -60,7 +59,7 @@ auto SampleManager::getSampleIpEndpoints() const -> std::vector<IPEndpoint> {
 auto SampleManager::getSampleNodes() const -> std::vector<SampleNode> {
     std::vector<SampleNode> ret;
     for (const auto &node : mSampleNodes) {
-        ret.push_back(node);
+        ret.push_back(*node);
     }
     return ret;
 }
@@ -68,17 +67,17 @@ auto SampleManager::getSampleNodes() const -> std::vector<SampleNode> {
 auto SampleManager::excludeIpEndpoints() -> std::vector<IPEndpoint> {
     auto ips = mIpEndpoints;
     for (const auto &node : mSampleNodes) {
-        ips.erase(node.endpoint);
+        ips.erase(node->endpoint);
     }
     return {ips.begin(), ips.end()};
 }
 
 void SampleManager::excludeIpEndpoint(const IPEndpoint &endpoint) {
     mIpEndpoints.insert(endpoint);
-    auto it = mIpEndpointToSampleNode.find(endpoint);
-    if (it != mIpEndpointToSampleNode.end()) {
-        mSampleNodes.erase(it->second);
-        mIpEndpointToSampleNode.erase(it);
+    if (auto it = std::find_if(mSampleNodes.begin(), mSampleNodes.end(),
+                               [&endpoint](const auto &node) { return node->endpoint == endpoint; });
+        it != mSampleNodes.end()) {
+        mSampleNodes.erase(it);
     }
 }
 
@@ -94,6 +93,11 @@ auto SampleManager::stop() -> Task<> {
     mRandomDiffusion = false;
     mTaskScope.cancel();
     co_await mTaskScope;
+    for (auto &node : mSampleNodes) {
+        if (node->status == SampleNode::Sampling) {
+            node->status = SampleNode::NoStatus;
+        }
+    }
     co_return;
 }
 
@@ -119,15 +123,16 @@ void SampleManager::dump() {
     SAMPLE_LOG("  AutoSample: {}", mAutoSample);
     SAMPLE_LOG("  RandomDiffusion: {}", mRandomDiffusion);
     SAMPLE_LOG("Sample Nodes:");
-    SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "IpEndpoint", IP_WIDTH, "Status", STATUS_WIDTH,
-            "Timeout", TIMEOUT_WIDTH, "HashsCount", COUNT_WIDTH, "SuccessCount", COUNT_WIDTH, "FailureCount",
-            COUNT_WIDTH);
+    SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "IpEndpoint", IP_WIDTH, "Status",
+               STATUS_WIDTH, "Timeout", TIMEOUT_WIDTH, "HashsCount", COUNT_WIDTH, "SuccessCount", COUNT_WIDTH,
+               "Failure", COUNT_WIDTH);
     SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "---------", IP_WIDTH, "------", STATUS_WIDTH,
-            "-------", TIMEOUT_WIDTH, "---------", COUNT_WIDTH, "----------", COUNT_WIDTH, "----------", COUNT_WIDTH);
+               "-------", TIMEOUT_WIDTH, "---------", COUNT_WIDTH, "----------", COUNT_WIDTH, "----------",
+               COUNT_WIDTH);
     for (const auto &node : mSampleNodes) {
-        SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", node.endpoint.toString(), IP_WIDTH,
-                node.status, STATUS_WIDTH, std::max(0, (int)(node.timeout - now)), TIMEOUT_WIDTH, node.hashsCount,
-                COUNT_WIDTH, node.successCount, COUNT_WIDTH, node.failureCount, COUNT_WIDTH);
+        SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", node->endpoint.toString(), IP_WIDTH,
+                   node->status, STATUS_WIDTH, std::max(0, (int)(node->timeout - now)), TIMEOUT_WIDTH, node->hashsCount,
+                   COUNT_WIDTH, node->successCount, COUNT_WIDTH, node->failure, COUNT_WIDTH);
     }
     SAMPLE_LOG("exclude IpEndpoints:");
     SAMPLE_LOG("  | IpEndpoint");
@@ -153,69 +158,67 @@ auto SampleManager::randomDiffusion(uint64_t &nextTime) -> Task<void> {
     }
 }
 
-auto SampleManager::sample(SampleNode node, uint64_t &nextTime) -> Task<> {
-    SAMPLE_LOG("Sample {}", node.endpoint);
-    auto res = co_await mSession.sampleInfoHashes(node.endpoint, NodeId::rand());
+auto SampleManager::sample(std::shared_ptr<SampleNode> node, uint64_t &nextTime) -> Task<> {
+    while (mSamplingCount > MAX_PARALLEL_SAMPLE) {
+        mSampleEvent.clear();
+        if (auto ret = co_await mSampleEvent; !ret) { // wait for sampling count to decrease
+            node->status = SampleNode::NoStatus;
+            co_return;
+        }
+    }
+    mSamplingCount++;
+    SAMPLE_LOG("Sample {}", node->endpoint);
+    auto res = co_await mSession.sampleInfoHashes(node->endpoint, NodeId::rand());
     if (!res) {
         if (res.error() == KrpcError::RpcErrorMessage) {
-            node.failureCount = 114514;
+            node->timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
+            node->status  = SampleNode::BlackList;
+            node->failure = 114514;
         }
         if (res.error() != Error::Canceled) {
-            if (auto ret = co_await mSession.ping(node.endpoint); !ret) {
-                if (node.status == SampleNode::BlackList || node.status == SampleNode::Retry) {
-                    node.timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
-                    node.status  = SampleNode::BlackList;
-                }
-                else {
-                    node.timeout = RESAMPLE_INTERVAL + mLastSampleTime;
-                    node.status  = SampleNode::Retry;
-                }
-                node.failureCount++;
+            if (auto ret = co_await mSession.ping(node->endpoint); !ret) {
+                node->timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
+                node->status  = SampleNode::BlackList;
+                node->failure = 114514;
             }
             else {
-                node.timeout = RESAMPLE_INTERVAL + mLastSampleTime;
-                node.status  = SampleNode::Retry;
-                node.failureCount += 5;
+                node->timeout = RESAMPLE_INTERVAL + mLastSampleTime;
+                node->status  = SampleNode::Retry;
+                node->failure += 5;
             }
         }
-        SAMPLE_LOG("Failed to sample {}, error: {}", node.endpoint, res.error());
+        SAMPLE_LOG("Failed to sample {}, error: {}", node->endpoint, res.error());
     }
     else if (std::any_of(res->samples.begin(), res->samples.end(),
                          [](const InfoHash &hash) { return hash == InfoHash::zero(); })) {
-        SAMPLE_LOG("Failed to sample {}, error: zero hash", node.endpoint);
-        node.failureCount = 114514;
+        SAMPLE_LOG("Failed to sample {}, error: zero hash", node->endpoint);
+        node->status  = SampleNode::BlackList;
+        node->failure = 114514;
     }
     else {
-        node.timeout = std::clamp(res->interval, res->samples.size() < res->num ? MIN_SAMPLE_INTERVAL : (60 * 60),
-                                  MAX_SAMPLE_INTERVAL) +
-                       mLastSampleTime; // at least 10 min, at most 6 hours
-        node.successCount++;
-        node.failureCount = 0;
-        node.status       = SampleNode::NoStatus;
-        int newHashCount  = 0;
+        node->timeout = std::clamp(res->interval, res->samples.size() < res->num ? MIN_SAMPLE_INTERVAL : (60 * 60),
+                                   MAX_SAMPLE_INTERVAL) +
+                        mLastSampleTime; // at least 10 min, at most 6 hours
+        node->successCount++;
+        node->failure    = 0;
+        node->status     = SampleNode::NoStatus;
+        int newHashCount = 0;
         if (mOnInfoHashs) {
             newHashCount += mOnInfoHashs(res->samples);
             if (newHashCount == 0) {
-                node.timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
+                node->timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
             }
         }
-        node.hashsCount += newHashCount;
+        node->hashsCount += newHashCount;
         if (mRandomDiffusion) {
             for (auto &hash : res->nodes) {
                 addSampleIpEndpoint(hash.ip);
             }
         }
     }
-    nextTime = std::min(nextTime, node.timeout - mLastSampleTime);
-    auto it  = mIpEndpointToSampleNode.find(node.endpoint);
-    if (it != mIpEndpointToSampleNode.end()) {
-        mSampleNodes.erase(it->second);
-        mIpEndpointToSampleNode.erase(it);
-        if (node.failureCount <= MAX_ALLOWED_SAMPLE_FAILURES) {
-            auto itt                               = mSampleNodes.emplace_hint(mSampleNodes.begin(), std::move(node));
-            mIpEndpointToSampleNode[node.endpoint] = itt;
-        }
-    }
+    nextTime = std::min(nextTime, node->timeout - mLastSampleTime);
+    mSamplingCount--;
+    mSampleEvent.set();
 }
 
 auto SampleManager::autoSample() -> Task<void> {
@@ -226,33 +229,38 @@ auto SampleManager::autoSample() -> Task<void> {
                 break;
             }
         }
+        while (mTaskScope.runningTasks() > MAX_SAMPLE_TASKS) {
+            if (auto ret = co_await mSamplingEvent; !ret) {
+                break;
+            }
+        }
         mLastSampleTime =
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count();
-        uint64_t  nextTime = MAX_SAMPLE_INTERVAL;
-        TaskScope scope;
+        uint64_t nextTime = MAX_SAMPLE_INTERVAL;
         SAMPLE_LOG("Sample nodes: {}, time: {}", mSampleNodes.size(), mLastSampleTime);
         for (auto it = mSampleNodes.begin(); it != mSampleNodes.end();) {
-            auto &node = *it;
-            if (node.failureCount > MAX_ALLOWED_SAMPLE_FAILURES) {
-                mIpEndpointToSampleNode.erase(node.endpoint);
-                it = mSampleNodes.erase(it);
-                continue;
+            auto node = *it;
+            if (node->timeout <= mLastSampleTime) {
+                if (node->status == SampleNode::BlackList) {
+                    mIpEndpoints.erase(node->endpoint);
+                    it = mSampleNodes.erase(it);
+                    continue;
+                }
+                if (node->status != SampleNode::Sampling) {
+                    node->status = SampleNode::Sampling;
+                    mTaskScope.spawn(sample(node, nextTime));
+                }
             }
             else {
-                it = std::next(it);
+                nextTime = std::min(nextTime, node->timeout - mLastSampleTime);
             }
-            if (node.timeout <= mLastSampleTime && scope.runningTasks() < MAX_PARALLEL_SAMPLE) {
-                scope.spawn(sample(node, nextTime));
-            }
-            else {
-                nextTime = std::min(nextTime, node.timeout - mLastSampleTime);
-            }
+            it = std::next(it);
         }
-        if (scope.runningTasks()) {
-            co_await scope;
+        if (nextTime == MAX_SAMPLE_INTERVAL) {
+            nextTime = MIN_SAMPLE_INTERVAL;
         }
-        else if (mRandomDiffusion) {
+        if (mTaskScope.runningTasks() <= 1 && mRandomDiffusion) {
             co_await randomDiffusion(nextTime);
         }
         if (mAutoSample) {
