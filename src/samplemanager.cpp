@@ -26,7 +26,8 @@ SampleManager::~SampleManager() {
 bool SampleManager::addSampleIpEndpoint(const IPEndpoint &endpoint) {
     if (mIpEndpoints.find(endpoint) == mIpEndpoints.end()) {
         mIpEndpoints.insert(endpoint);
-        mSampleNodes.emplace(SampleNode {.endpoint = endpoint});
+        auto it = mSampleNodes.emplace_hint(mSampleNodes.begin(), SampleNode {.endpoint = endpoint});
+        mIpEndpointToSampleNode.insert(std::make_pair(endpoint, it));
         mSampleEvent.set();
         return true;
     }
@@ -35,17 +36,17 @@ bool SampleManager::addSampleIpEndpoint(const IPEndpoint &endpoint) {
 
 void SampleManager::removeSample(const IPEndpoint &endpoint) {
     mIpEndpoints.erase(endpoint);
-    for (auto it = mSampleNodes.begin(); it != mSampleNodes.end(); ++it) {
-        if (it->endpoint == endpoint) {
-            mSampleNodes.erase(it);
-            break;
-        }
+    auto it = mIpEndpointToSampleNode.find(endpoint);
+    if (it != mIpEndpointToSampleNode.end()) {
+        mSampleNodes.erase(it->second);
+        mIpEndpointToSampleNode.erase(it);
     }
 }
 
 void SampleManager::clearSamples() {
     mIpEndpoints.clear();
     mSampleNodes.clear();
+    mIpEndpointToSampleNode.clear();
 }
 
 auto SampleManager::getSampleIpEndpoints() const -> std::vector<IPEndpoint> {
@@ -74,11 +75,10 @@ auto SampleManager::excludeIpEndpoints() -> std::vector<IPEndpoint> {
 
 void SampleManager::excludeIpEndpoint(const IPEndpoint &endpoint) {
     mIpEndpoints.insert(endpoint);
-    for (auto it = mSampleNodes.begin(); it != mSampleNodes.end(); ++it) {
-        if (it->endpoint == endpoint) {
-            mSampleNodes.erase(it);
-            break;
-        }
+    auto it = mIpEndpointToSampleNode.find(endpoint);
+    if (it != mIpEndpointToSampleNode.end()) {
+        mSampleNodes.erase(it->second);
+        mIpEndpointToSampleNode.erase(it);
     }
 }
 
@@ -161,15 +161,22 @@ auto SampleManager::sample(SampleNode node, uint64_t &nextTime) -> Task<> {
             node.failureCount = 114514;
         }
         if (res.error() != Error::Canceled) {
-            if (node.status == SampleNode::BlackList || node.status == SampleNode::Retry) {
-                node.timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
-                node.status  = SampleNode::BlackList;
+            if (auto ret = co_await mSession.ping(node.endpoint); !ret) {
+                if (node.status == SampleNode::BlackList || node.status == SampleNode::Retry) {
+                    node.timeout = MAX_SAMPLE_INTERVAL + mLastSampleTime;
+                    node.status  = SampleNode::BlackList;
+                }
+                else {
+                    node.timeout = RESAMPLE_INTERVAL + mLastSampleTime;
+                    node.status  = SampleNode::Retry;
+                }
+                node.failureCount++;
             }
             else {
                 node.timeout = RESAMPLE_INTERVAL + mLastSampleTime;
                 node.status  = SampleNode::Retry;
+                node.failureCount += 5;
             }
-            node.failureCount++;
         }
         DHT_LOG("Failed to sample {}, error: {}", node.endpoint, res.error());
     }
@@ -183,8 +190,9 @@ auto SampleManager::sample(SampleNode node, uint64_t &nextTime) -> Task<> {
                                   MAX_SAMPLE_INTERVAL) +
                        mLastSampleTime; // at least 10 min, at most 6 hours
         node.successCount++;
-        node.status      = SampleNode::NoStatus;
-        int newHashCount = 0;
+        node.failureCount = 0;
+        node.status       = SampleNode::NoStatus;
+        int newHashCount  = 0;
         if (mOnInfoHashs) {
             newHashCount += mOnInfoHashs(res->samples);
             if (newHashCount == 0) {
@@ -199,12 +207,13 @@ auto SampleManager::sample(SampleNode node, uint64_t &nextTime) -> Task<> {
         }
     }
     nextTime = std::min(nextTime, node.timeout - mLastSampleTime);
-    if (auto it = std::find_if(mSampleNodes.begin(), mSampleNodes.end(),
-                               [&node](const SampleNode &nd) { return nd.endpoint == node.endpoint; });
-        it != mSampleNodes.end()) {
-        mSampleNodes.erase(it);
+    auto it  = mIpEndpointToSampleNode.find(node.endpoint);
+    if (it != mIpEndpointToSampleNode.end()) {
+        mSampleNodes.erase(it->second);
+        mIpEndpointToSampleNode.erase(it);
         if (node.failureCount <= MAX_ALLOWED_SAMPLE_FAILURES) {
-            mSampleNodes.emplace(std::move(node));
+            auto itt                               = mSampleNodes.emplace_hint(mSampleNodes.begin(), std::move(node));
+            mIpEndpointToSampleNode[node.endpoint] = itt;
         }
     }
 }
@@ -226,6 +235,7 @@ auto SampleManager::autoSample() -> Task<void> {
         for (auto it = mSampleNodes.begin(); it != mSampleNodes.end();) {
             auto &node = *it;
             if (node.failureCount > MAX_ALLOWED_SAMPLE_FAILURES) {
+                mIpEndpointToSampleNode.erase(node.endpoint);
                 it = mSampleNodes.erase(it);
                 continue;
             }

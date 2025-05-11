@@ -1,11 +1,9 @@
 #include "route.hpp"
 
 RoutingTable::RoutingTable(const NodeId &id) : mId(id) {
-
 }
 
 RoutingTable::~RoutingTable() {
-
 }
 
 auto RoutingTable::findBucketIndex(const NodeId &id) const -> size_t {
@@ -17,15 +15,13 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
     Node node {
         .lastSeen = std::chrono::steady_clock::now(),
         .endpoint = endpoint,
-        .state = Node::Good,
+        .state    = Node::Good,
     };
-    size_t idx = findBucketIndex(endpoint.id);
-    auto &bucket = mBuckets[idx];
-    auto &pending = bucket.pending;
-    auto &nodes = bucket.nodes;
-    auto it = std::find_if(nodes.begin(), nodes.end(), [&](const Node &n) {
-        return n.endpoint == endpoint;
-    });
+    size_t idx     = findBucketIndex(endpoint.id);
+    auto  &bucket  = mBuckets[idx];
+    auto  &pending = bucket.pending;
+    auto  &nodes   = bucket.nodes;
+    auto   it      = std::find_if(nodes.begin(), nodes.end(), [&](const Node &n) { return n.endpoint == endpoint; });
     if (it == nodes.end() && nodes.size() >= KBUCKET_SIZE) {
         // Not Found and The bucket is full, check pending list
         if (pending.size() >= KBUCKET_SIZE) {
@@ -40,9 +36,8 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
     if (it != nodes.end()) {
         // The node already exists, update it
         it->lastSeen = node.lastSeen;
-        it->state = Node::Good; // Mark the node as good
+        it->state    = Node::Good; // Mark the node as good
         return Status::Updated;
-
     }
     nodes.emplace_back(std::move(node));
     notifyChanged();
@@ -50,12 +45,10 @@ auto RoutingTable::updateNode(const NodeEndpoint &endpoint) -> Status {
 }
 
 auto RoutingTable::markBadNode(const NodeEndpoint &node) -> void {
-    size_t idx = findBucketIndex(node.id);
-    auto &bucket = mBuckets[idx];
-    auto &nodes = bucket.nodes;
-    auto it = std::find_if(nodes.begin(), nodes.end(), [&](const Node &n) {
-        return n.endpoint == node;
-    });
+    size_t idx    = findBucketIndex(node.id);
+    auto  &bucket = mBuckets[idx];
+    auto  &nodes  = bucket.nodes;
+    auto   it     = std::find_if(nodes.begin(), nodes.end(), [&](const Node &n) { return n.endpoint == node; });
     if (it == nodes.end()) { // The node not exists
         return;
     }
@@ -78,7 +71,7 @@ auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::
     std::vector<NodeEndpoint> vec;
 
 #if 1
-    int64_t idx = findBucketIndex(id);
+    int64_t idx  = findBucketIndex(id);
     int64_t step = idx > 80 ? -1 : 1; // Split the search to two parts
     while (vec.size() < max) {
         auto &bucket = mBuckets[idx];
@@ -94,15 +87,13 @@ auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::
         }
     }
 #else
-    std::vector<std::pair<NodeId, NodeEndpoint> > collected;
+    std::vector<std::pair<NodeId, NodeEndpoint>> collected;
     for (auto &bucket : mBuckets) {
         for (auto &node : bucket.nodes) {
             collected.emplace_back(node.endpoint.id.distance(id), node.endpoint);
         }
     }
-    std::sort(collected.begin(), collected.end(), [](const auto &a, const auto &b) {
-        return a.first < b.first;
-    });
+    std::sort(collected.begin(), collected.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
     for (auto &node : collected) {
         vec.push_back(node.second);
         if (vec.size() >= max) {
@@ -122,7 +113,7 @@ auto RoutingTable::nextRefresh() const -> std::optional<NodeEndpoint> {
                 continue;
             }
             last = &bucket;
-            continue;    
+            continue;
         }
         if (!bucket.nodes.empty() && bucket.lastUpdate > last->lastUpdate) {
             last = &bucket;
@@ -177,7 +168,6 @@ auto RoutingTable::dumpInfo() const -> void {
     ::fprintf(stderr, "%s", text.c_str());
     ::fflush(stderr);
 #endif
-
 }
 
 auto RoutingTable::nodes() const -> std::vector<NodeEndpoint> {
@@ -185,6 +175,16 @@ auto RoutingTable::nodes() const -> std::vector<NodeEndpoint> {
     for (auto &bucket : mBuckets) {
         for (auto &n : bucket.nodes) {
             nodes.emplace_back(n.endpoint);
+        }
+    }
+    return nodes;
+}
+
+auto RoutingTable::rawNodes() const -> std::vector<Node> {
+    std::vector<Node> nodes;
+    for (auto &bucket : mBuckets) {
+        for (auto &n : bucket.nodes) {
+            nodes.emplace_back(n);
         }
     }
     return nodes;
@@ -202,7 +202,8 @@ auto RoutingTable::setOnNodeChanged(std::function<void()> &&callback) -> void {
     mOnNodeChanged = std::move(callback);
 }
 
-auto RoutingTable::translateTimepoint(std::chrono::steady_clock::time_point tp) const -> std::chrono::system_clock::time_point {
+auto RoutingTable::translateTimepoint(std::chrono::steady_clock::time_point tp) const
+    -> std::chrono::system_clock::time_point {
     auto diff = tp - mInitTime;
     return mInitTimeSystem + std::chrono::duration_cast<std::chrono::system_clock::duration>(diff);
 }

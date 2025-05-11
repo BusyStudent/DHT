@@ -94,6 +94,13 @@ public:
     auto nodes() const -> std::vector<NodeEndpoint>;
 
     /**
+     * @brief Get the raw node in the routing table
+     * 
+     * @return std::vector<NodeEndpoint> 
+     */
+    auto rawNodes() const -> std::vector<Node>;
+
+    /**
      * @brief The size of the node in the routing table
      * 
      * @return size_t 

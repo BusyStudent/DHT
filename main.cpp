@@ -77,21 +77,28 @@ public:
 
         connect(ui.pingButton, &QPushButton::clicked, this, &App::onPingButtonClicked);
 
-        connect(ui.showBucketsButton, &QPushButton::clicked, this, [this]() {
-            // auto tree = ui.treeWidget;
-            // tree->clear();
-            // auto &table = mSession.routingTable();
-            // for (size_t i = 0; i < table.buckets.size(); i++) {
-            //     auto &bucket = table.buckets[i];
-            //     auto item = new QTreeWidgetItem(tree);
-            //     item->setText(0, QString::number(i));
-            //     for (auto &node : bucket.nodes) {
-            //         auto subItem = new QTreeWidgetItem(item);
-            //         subItem->setText(0, QString::fromStdString(node->id.toHex()));
-            //         subItem->setText(1,
-            //         QString::fromStdString(node->endpoint.toString()));
-            //     }
-            // }
+        connect(ui.refreshBucketsButton, &QPushButton::clicked, this, &App::refleshKBucketWidget);
+        connect(ui.findClosetNodesButton, &QPushButton::clicked, this, [this]() {
+            ui.closetNodesListWidget->clear();
+            if (!mSession) {
+                APP_LOG("Session not started");
+                return;
+            }
+            auto nodeIdStr = ui.closetNodeIdLineEdit->text().toUtf8();
+            if (nodeIdStr.isEmpty()) {
+                APP_LOG("Please input node id");
+                return;
+            }
+            auto nodeId = NodeId::fromHex(nodeIdStr.toStdString());
+            if (nodeId == NodeId::zero()) {
+                APP_LOG("Invalid node id");
+                return;
+            }
+            auto nodes = mSession->routingTable().findClosestNodes(nodeId);
+            for (const auto &node : nodes) {
+                ui.closetNodesListWidget->addItem(QString::fromUtf8(node.ip.toString()) + " - " +
+                                                  QString::fromUtf8(node.id.toHex()));
+            }
         });
 
         connect(ui.findNodeButton, &QPushButton::clicked, this, &App::onFindNodeButtonClicked);
@@ -245,6 +252,61 @@ public:
         }
     }
 
+    auto refleshKBucketWidget() -> void {
+        if (mSession) {
+            auto  treeWidget = ui.kBucketTableWidget;
+            auto &kbucket    = mSession->routingTable();
+
+            QStringList headers = {"IpEndpoint", "NodeId", "Distance", "LastSeen"};
+            treeWidget->clearContents(); // Clear existing data but not headers
+            treeWidget->setColumnCount(headers.size());
+            treeWidget->setRowCount(0);
+            treeWidget->setHorizontalHeaderLabels(headers);
+            ui.kBucketTableWidget->horizontalHeader()->setStretchLastSection(true);
+            ui.kBucketTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+
+            int  row = 0;
+            auto now = std::chrono::steady_clock::now();
+            for (auto &node : kbucket.rawNodes()) {
+                treeWidget->insertRow(row);
+
+                QTableWidgetItem *ipItem = new QTableWidgetItem(QString::fromStdString(node.endpoint.ip.toString()));
+                QTableWidgetItem *nodeIdItem = new QTableWidgetItem(QString::fromStdString(node.endpoint.id.toHex()));
+                QTableWidgetItem *distanceItem =
+                    new QTableWidgetItem(QString::number(kbucket.findBucketIndex(node.endpoint.id)));
+                QTableWidgetItem *lastSeenItem = new QTableWidgetItem(
+                    QString::number(std::chrono::duration_cast<std::chrono::seconds>(now - node.lastSeen).count()) +
+                    "s ago");
+
+                // no edit
+                ipItem->setFlags(ipItem->flags() & ~Qt::ItemIsEditable);
+                nodeIdItem->setFlags(nodeIdItem->flags() & ~Qt::ItemIsEditable);
+                distanceItem->setFlags(distanceItem->flags() & ~Qt::ItemIsEditable);
+                lastSeenItem->setFlags(lastSeenItem->flags() & ~Qt::ItemIsEditable);
+
+                // Optional: Align numbers to the center
+                ipItem->setTextAlignment(Qt::AlignCenter);
+                nodeIdItem->setTextAlignment(Qt::AlignCenter);
+                distanceItem->setTextAlignment(Qt::AlignCenter);
+                lastSeenItem->setTextAlignment(Qt::AlignCenter);
+
+                treeWidget->setItem(row, 0, ipItem);
+                treeWidget->setItem(row, 1, nodeIdItem);
+                treeWidget->setItem(row, 2, distanceItem);
+                treeWidget->setItem(row, 3, lastSeenItem);
+                row++;
+            }
+
+            auto next = kbucket.nextRefresh();
+            if (next) {
+                ui.nextRefreshLabel->setText(QString::fromStdString(next->ip.toString()));
+            }
+            else {
+                ui.kBucketTableWidget->setToolTip("N/A");
+            }
+        }
+    }
+
     auto refleshSampleTableWidget() -> void {
         if (mSampleManager != nullptr) {
             auto sampleNodes = mSampleManager->getSampleNodes();
@@ -262,11 +324,10 @@ public:
             for (auto &node : sampleNodes) {
                 ui.sampleNodeTableWidget->insertRow(row);
 
-                QTableWidgetItem *ipItem = new QTableWidgetItem(QString::fromStdString(node.endpoint.toString()));
-                QTableWidgetItem *statusItem =
-                    new QTableWidgetItem(qFormat("{}", node.status));
+                QTableWidgetItem *ipItem     = new QTableWidgetItem(QString::fromStdString(node.endpoint.toString()));
+                QTableWidgetItem *statusItem = new QTableWidgetItem(qFormat("{}", node.status));
                 QTableWidgetItem *timeoutItem =
-                    new QTableWidgetItem(QString::number(std::max(0, (int)(node.timeout - now))));
+                    new QTableWidgetItem(QString::number(std::max(0, (int)(node.timeout - now))) + "s");
                 QTableWidgetItem *hashsItem   = new QTableWidgetItem(QString::number(node.hashsCount));
                 QTableWidgetItem *successItem = new QTableWidgetItem(QString::number(node.successCount));
                 QTableWidgetItem *failureItem = new QTableWidgetItem(QString::number(node.failureCount));
@@ -291,10 +352,10 @@ public:
                 ui.sampleNodeTableWidget->setItem(row, 5, failureItem);
                 row++;
             }
-            ui.sampleNodeTableWidget->resizeColumnsToContents();
             // Optional: Stretch the first column (IpEndpoint) if space allows
             if (ui.sampleNodeTableWidget->columnCount() > 0) {
                 ui.sampleNodeTableWidget->horizontalHeader()->setMinimumSectionSize(60);
+                ui.sampleNodeTableWidget->horizontalHeader()->setStretchLastSection(true);
                 ui.sampleNodeTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
             }
 

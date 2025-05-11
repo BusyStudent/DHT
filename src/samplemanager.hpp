@@ -58,14 +58,15 @@ private:
     auto onQuery(const BenObject &object, const IPEndpoint &ipendpoint) -> void;
 
 private:
-    TaskScope            mTaskScope;
-    DhtSession          &mSession;
-    uint64_t             mLastSampleTime = 0;
-    Event                mSampleEvent;
-    bool                 mAutoSample      = false;
-    bool                 mRandomDiffusion = true;
-    std::set<IPEndpoint> mIpEndpoints;
-    std::set<SampleNode> mSampleNodes;
+    TaskScope                                            mTaskScope;
+    DhtSession                                          &mSession;
+    uint64_t                                             mLastSampleTime = 0;
+    Event                                                mSampleEvent;
+    bool                                                 mAutoSample      = false;
+    bool                                                 mRandomDiffusion = true;
+    std::set<IPEndpoint>                                 mIpEndpoints;
+    std::set<SampleNode>                                 mSampleNodes;
+    std::map<IPEndpoint, std::set<SampleNode>::iterator> mIpEndpointToSampleNode;
 
     std::function<int(const std::vector<InfoHash> &)> mOnInfoHashs;
 };
