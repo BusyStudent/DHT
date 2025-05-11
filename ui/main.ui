@@ -921,7 +921,7 @@ QTableWidget::item:selected:!active {
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab_2">
+      <widget class="QWidget" name="kBucketTab">
        <attribute name="title">
         <string>K-Bucket</string>
        </attribute>
@@ -1016,7 +1016,7 @@ QTableWidget::item:selected:!active {
       </widget>
       <widget class="QWidget" name="tab_4">
        <attribute name="title">
-        <string>Bt Peer Test</string>
+        <string>Manager Test</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
@@ -1048,7 +1048,28 @@ QTableWidget::item:selected:!active {
           <item>
            <widget class="QPushButton" name="btConnectButton">
             <property name="text">
-             <string>Connect</string>
+             <string>Bt Connect</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_11">
+          <item>
+           <widget class="QLabel" name="label_11">
+            <property name="text">
+             <string>InfoHash:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="getPeersManagerEdit"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="getPeersManagerButton">
+            <property name="text">
+             <string>GetPeers</string>
             </property>
            </widget>
           </item>

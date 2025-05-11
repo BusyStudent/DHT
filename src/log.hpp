@@ -24,7 +24,14 @@
 #define UTP_LOG(fmt, ...) DO_LOG("[UTP]", fmt, ##__VA_ARGS__)
 #endif
 
-
 #ifndef APP_LOG
 #define APP_LOG(fmt, ...) DO_LOG("[APP]", fmt, ##__VA_ARGS__)
+#endif
+
+#ifndef GET_PEERS_LOG
+#define GET_PEERS_LOG(fmt, ...) DO_LOG("[GetPeersManager]", fmt, ##__VA_ARGS__)
+#endif
+
+#ifndef SAMPLE_LOG
+#define SAMPLE_LOG(fmt, ...) DO_LOG("[SampleManager]", fmt, ##__VA_ARGS__)
 #endif

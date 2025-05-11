@@ -15,6 +15,7 @@
 #include "src/bt.hpp"
 #include "src/fetchmanager.hpp"
 #include "src/samplemanager.hpp"
+#include "src/getpeersmanager.hpp"
 #include "src/metafetcher.hpp"
 #include "src/session.hpp"
 #include "src/torrent.hpp"
@@ -109,6 +110,7 @@ public:
 
         // Bt Peer Test part
         connect(ui.btConnectButton, &QPushButton::clicked, this, &App::onBtConnectButtonClicked);
+        connect(ui.getPeersManagerButton, &QPushButton::clicked, this, &App::onGetPeersManagerButtonClicked);
 
         connect(ui.dumpRouteTableButton, &QPushButton::clicked, this, [this]() {
             if (!mSession) {
@@ -137,7 +139,7 @@ public:
         });
 
         connect(ui.autoSampleBox, &QCheckBox::clicked, this, [this](bool checked) -> QAsyncSlot<> {
-            if (mSampleManager != nullptr) {
+            if (mSampleManager) {
                 if (checked) {
                     ui.randomDiffusionBox->setDisabled(false);
                     co_await mSampleManager->start();
@@ -150,7 +152,7 @@ public:
         });
 
         connect(ui.randomDiffusionBox, &QCheckBox::clicked, this, [this](bool checked) -> void {
-            if (mSampleManager != nullptr) {
+            if (mSampleManager) {
                 mSampleManager->setRandomDiffusion(checked);
             }
         });
@@ -191,8 +193,12 @@ public:
             onHashFound(hash);
             mFetchManager.addHash(hash, endpoint);
         });
-        mSession->routingTable().setOnNodeChanged(
-            [&, this]() { setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size())); });
+        mSession->routingTable().setOnNodeChanged([&, this]() { 
+            setWindowTitle(QString("DhtClient Node: %1").arg(mSession->routingTable().size()));
+            if (ui.tabWidget->currentWidget() == ui.kBucketTab) { // Refresh
+                // refleshKBucketWidget();
+            }
+        });
         if (ui.saveSessionBox->isChecked()) {
             mSession->loadFile("session.cache");
         }
@@ -200,13 +206,18 @@ public:
             mSession->setSkipBootstrap(true);
         }
         mScope.spawn(&DhtSession::start, &*mSession);
-        mSampleManager = std::make_unique<SampleManager>(mSession.value());
+        mSampleManager.emplace(*mSession);
         mSampleManager->setOnInfoHashs([this](const std::vector<InfoHash> &infohashs) {
             int count = 0;
             for (const auto &hash : infohashs) {
                 count += onHashFound(hash);
             }
             return count;
+        });
+        mGetPeersManager.emplace(*mSession);
+        mGetPeersManager->setOnPeerGot([this](const InfoHash &hash, const IPEndpoint &peer) {
+            APP_LOG("Got peer {} : {}", hash, peer);
+            mFetchManager.addHash(hash, peer);
         });
 #endif
     }
@@ -285,7 +296,7 @@ public:
                 lastSeenItem->setFlags(lastSeenItem->flags() & ~Qt::ItemIsEditable);
 
                 // Optional: Align numbers to the center
-                ipItem->setTextAlignment(Qt::AlignCenter);
+                ipItem->setTextAlignment(Qt::AlignVCenter | Qt::AlignLeft);
                 nodeIdItem->setTextAlignment(Qt::AlignCenter);
                 distanceItem->setTextAlignment(Qt::AlignCenter);
                 lastSeenItem->setTextAlignment(Qt::AlignCenter);
@@ -308,7 +319,7 @@ public:
     }
 
     auto refleshSampleTableWidget() -> void {
-        if (mSampleManager != nullptr) {
+        if (mSampleManager) {
             auto sampleNodes = mSampleManager->getSampleNodes();
             ui.sampleNodeTableWidget->clearContents(); // Clear existing data but not headers
             ui.sampleNodeTableWidget->setRowCount(0);  // Reset row count
@@ -450,8 +461,8 @@ public:
             for (auto &node : res->nodes) {
                 QListWidgetItem *item = new QListWidgetItem(qFormat("node {} endpoint {}", node.id, node.ip));
                 QVariantMap      map;
-                map.insert("copy endpoint", QString::fromUtf8(node.ip.toString()));
-                map.insert("copy id", QString::fromUtf8(node.id.toHex()));
+                map.insert("endpoint", QString::fromUtf8(node.ip.toString()));
+                map.insert("id", QString::fromUtf8(node.id.toHex()));
                 item->setData((int)CopyableDataFlag::TextMap, map);
                 ui.logWidget->addItem(item);
             }
@@ -464,7 +475,7 @@ public:
             for (auto &peer : res->values) {
                 QListWidgetItem *item = new QListWidgetItem(qFormat("peer {}", peer));
                 QVariantMap      map;
-                map.insert("copy endpoint", QString::fromUtf8(peer.toString()));
+                map.insert("endpoint", QString::fromUtf8(peer.toString()));
                 item->setData((int)CopyableDataFlag::TextMap, map);
                 ui.logWidget->addItem(item);
             }
@@ -502,6 +513,18 @@ public:
 #else
         mFetchManager.addHash(infoHash, endpoint);
 #endif
+    }
+
+    auto onGetPeersManagerButtonClicked() -> QAsyncSlot<void> {
+        if (!mGetPeersManager) {
+            co_return;
+        }
+        auto infoHash = InfoHash::fromHex(ui.getPeersManagerEdit->text().toStdString().c_str());
+        if (infoHash == InfoHash::zero()) {
+            ui.statusbar->showMessage("Invalid endpoint or hash", 5000);
+            co_return;
+        }
+        mGetPeersManager->addHash(infoHash);
     }
 
     auto onMetadataFetched(InfoHash hash, std::vector<std::byte> data) -> void {
@@ -544,6 +567,7 @@ public:
             mSampleManager->stop().wait();
         }
         mSampleManager.reset();
+        mGetPeersManager.reset();
         if (mSession && ui.saveSessionBox->isEnabled()) {
             mSession->saveFile("session.cache");
         }
@@ -556,6 +580,11 @@ public:
             QListWidgetItem *item = new QListWidgetItem(QString::fromStdString(hash.toHex()));
             item->setData((int)CopyableDataFlag::Hash, QString::fromStdString(hash.toHex()));
             ui.infoHashWidget->addItem(item);
+
+#if 1
+            // Add it to the get peers manager
+            mGetPeersManager->addHash(hash);
+#endif
             return 1;
         }
         return 0;
@@ -566,7 +595,8 @@ private:
     Ui::MainWindow                 ui;
     UdpClient                      mUdp;
     std::optional<UtpContext>      mUtp;
-    std::unique_ptr<SampleManager> mSampleManager;
+    std::optional<SampleManager>   mSampleManager;
+    std::optional<GetPeersManager> mGetPeersManager;
     TaskScope                      mScope;
     std::optional<DhtSession>      mSession;
 

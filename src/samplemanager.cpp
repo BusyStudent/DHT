@@ -115,35 +115,35 @@ void SampleManager::dump() {
     const int COUNT_WIDTH   = 12; // Right-aligned (for Hashs, Success, Failure)
     auto      now =
         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    DHT_LOG("SampleManager dump:");
-    DHT_LOG("  AutoSample: {}", mAutoSample);
-    DHT_LOG("  RandomDiffusion: {}", mRandomDiffusion);
-    DHT_LOG("Sample Nodes:");
-    DHT_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "IpEndpoint", IP_WIDTH, "Status", STATUS_WIDTH,
+    SAMPLE_LOG("SampleManager dump:");
+    SAMPLE_LOG("  AutoSample: {}", mAutoSample);
+    SAMPLE_LOG("  RandomDiffusion: {}", mRandomDiffusion);
+    SAMPLE_LOG("Sample Nodes:");
+    SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "IpEndpoint", IP_WIDTH, "Status", STATUS_WIDTH,
             "Timeout", TIMEOUT_WIDTH, "HashsCount", COUNT_WIDTH, "SuccessCount", COUNT_WIDTH, "FailureCount",
             COUNT_WIDTH);
-    DHT_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "---------", IP_WIDTH, "------", STATUS_WIDTH,
+    SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", "---------", IP_WIDTH, "------", STATUS_WIDTH,
             "-------", TIMEOUT_WIDTH, "---------", COUNT_WIDTH, "----------", COUNT_WIDTH, "----------", COUNT_WIDTH);
     for (const auto &node : mSampleNodes) {
-        DHT_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", node.endpoint.toString(), IP_WIDTH,
+        SAMPLE_LOG("  | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}} | {:<{}}", node.endpoint.toString(), IP_WIDTH,
                 node.status, STATUS_WIDTH, std::max(0, (int)(node.timeout - now)), TIMEOUT_WIDTH, node.hashsCount,
                 COUNT_WIDTH, node.successCount, COUNT_WIDTH, node.failureCount, COUNT_WIDTH);
     }
-    DHT_LOG("exclude IpEndpoints:");
-    DHT_LOG("  | IpEndpoint");
-    DHT_LOG("  | ---------");
+    SAMPLE_LOG("exclude IpEndpoints:");
+    SAMPLE_LOG("  | IpEndpoint");
+    SAMPLE_LOG("  | ---------");
     auto excludeIps = excludeIpEndpoints();
     for (const auto &ip : excludeIps) {
-        DHT_LOG("  | {}", ip);
+        SAMPLE_LOG("  | {}", ip);
     }
-    DHT_LOG("total: sample nodes {}, exclude ip endpoints {}", mSampleNodes.size(), excludeIps.size());
+    SAMPLE_LOG("total: sample nodes {}, exclude ip endpoints {}", mSampleNodes.size(), excludeIps.size());
 }
 
 auto SampleManager::randomDiffusion(uint64_t &nextTime) -> Task<void> {
     auto id  = NodeId::rand();
     auto res = co_await mSession.findNode(id, DhtSession::FindAlgo::AStar);
     if (!res) {
-        DHT_LOG("Failed to random diffusion, error: {}", res.error());
+        SAMPLE_LOG("Failed to random diffusion, error: {}", res.error());
         co_return;
     }
     for (auto &node : *res) {
@@ -154,7 +154,7 @@ auto SampleManager::randomDiffusion(uint64_t &nextTime) -> Task<void> {
 }
 
 auto SampleManager::sample(SampleNode node, uint64_t &nextTime) -> Task<> {
-    DHT_LOG("Sample {}", node.endpoint);
+    SAMPLE_LOG("Sample {}", node.endpoint);
     auto res = co_await mSession.sampleInfoHashes(node.endpoint, NodeId::rand());
     if (!res) {
         if (res.error() == KrpcError::RpcErrorMessage) {
@@ -178,11 +178,11 @@ auto SampleManager::sample(SampleNode node, uint64_t &nextTime) -> Task<> {
                 node.failureCount += 5;
             }
         }
-        DHT_LOG("Failed to sample {}, error: {}", node.endpoint, res.error());
+        SAMPLE_LOG("Failed to sample {}, error: {}", node.endpoint, res.error());
     }
     else if (std::any_of(res->samples.begin(), res->samples.end(),
                          [](const InfoHash &hash) { return hash == InfoHash::zero(); })) {
-        DHT_LOG("Failed to sample {}, error: zero hash", node.endpoint);
+        SAMPLE_LOG("Failed to sample {}, error: zero hash", node.endpoint);
         node.failureCount = 114514;
     }
     else {
@@ -231,7 +231,7 @@ auto SampleManager::autoSample() -> Task<void> {
                 .count();
         uint64_t  nextTime = MAX_SAMPLE_INTERVAL;
         TaskScope scope;
-        DHT_LOG("Sample nodes: {}, time: {}", mSampleNodes.size(), mLastSampleTime);
+        SAMPLE_LOG("Sample nodes: {}, time: {}", mSampleNodes.size(), mLastSampleTime);
         for (auto it = mSampleNodes.begin(); it != mSampleNodes.end();) {
             auto &node = *it;
             if (node.failureCount > MAX_ALLOWED_SAMPLE_FAILURES) {

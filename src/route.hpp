@@ -71,7 +71,7 @@ public:
      * @param max The max number of nodes to return
      * @return std::vector<NodeEndpoint> The list of closest nodes
      */
-    auto findClosestNodes(const NodeId &id, size_t max = 1) const -> std::vector<NodeEndpoint>;
+    auto findClosestNodes(const NodeId &id, size_t max = KBUCKET_SIZE) const -> std::vector<NodeEndpoint>;
 
     /**
      * @brief Get the next node endpoint to refresh

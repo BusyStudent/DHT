@@ -130,8 +130,6 @@ public:
      */
     auto getPeers(const IPEndpoint &endpoint, const InfoHash &target) -> IoTask<GetPeersReply>;
 
-    auto getPeers(const InfoHash &target);
-
     /**
      * @brief Process the udp input from the socket
      *

@@ -70,7 +70,7 @@ auto RoutingTable::markBadNode(const NodeEndpoint &node) -> void {
 auto RoutingTable::findClosestNodes(const NodeId &id, size_t max) const -> std::vector<NodeEndpoint> {
     std::vector<NodeEndpoint> vec;
 
-#if 1
+#if 0
     int64_t idx  = findBucketIndex(id);
     int64_t step = idx > 80 ? -1 : 1; // Split the search to two parts
     while (vec.size() < max) {

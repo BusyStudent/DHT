@@ -63,10 +63,10 @@ inline auto encodeIPEndpoint(const IPEndpoint &endpoint) -> std::string {
 inline auto decodeIPEndpoint(std::string_view endpoint) -> IPEndpoint {
     // Adress : Port
     IPAddress address;
-    if (endpoint.size() == sizeof(::in_addr)) {
+    if (endpoint.size() == sizeof(::in_addr) + sizeof(uint16_t)) {
         address = IPAddress::fromRaw(endpoint.data(), sizeof(::in_addr)).value();
     }
-    else if (endpoint.size() == sizeof(::in6_addr)) {
+    else if (endpoint.size() == sizeof(::in6_addr) + + sizeof(uint16_t)) {
         address = IPAddress::fromRaw(endpoint.data(), sizeof(::in6_addr)).value();
     }
     else {
