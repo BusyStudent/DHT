@@ -1,6 +1,6 @@
 #include "torrent.hpp"
 #include "log.hpp"
-#include "sha1.h"
+#include "core/sha1.h"
 
 auto Torrent::name() const -> std::string {
     return mDict["info"]["name"].toString();

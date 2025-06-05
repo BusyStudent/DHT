@@ -1,4 +1,4 @@
-#include "bencode.hpp"
+#include "core/bencode.hpp"
 #include "log.hpp"
 #include "bt.hpp"
 
@@ -39,7 +39,7 @@ auto BtClient::handshake(const InfoHash &hash, const PeerId &peerId) -> IoTask<v
     }
     // Begin the extension handshake
     auto dict = BenObject::makeDict();
-    dict["m"] = BenObject::makeDict();
+    dict["PeerId"] = BenObject::makeDict();
     dict["m"]["ut_metadata"] = MetadataExtId; // We need metadata
     dict["v"] = "DHT Indexer https://github.com/BusyStudent/DHT";
     // dict["m"]["ut_pex"] = PexExtId; // We need pex

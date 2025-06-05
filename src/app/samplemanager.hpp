@@ -1,6 +1,6 @@
 #pragma once
 
-#include "session.hpp"
+#include "dht/session.hpp"
 
 class SampleManager {
 public:

@@ -12,14 +12,14 @@
 #include <optional>
 #include <QTimer>
 
-#include "src/bt.hpp"
-#include "src/fetchmanager.hpp"
-#include "src/samplemanager.hpp"
-#include "src/getpeersmanager.hpp"
-#include "src/metafetcher.hpp"
-#include "src/session.hpp"
-#include "src/torrent.hpp"
-#include "src/utp.hpp"
+#include "src/bt/bt.hpp"
+#include "src/app/fetchmanager.hpp"
+#include "src/app/samplemanager.hpp"
+#include "src/app/getpeersmanager.hpp"
+#include "src/bt/metafetcher.hpp"
+#include "src/dht/session.hpp"
+#include "src/bt/torrent.hpp"
+#include "src/utp/utp.hpp"
 #include "ui/widgets/info_hash_list_widget.hpp"
 #include "ui/torrent_card.hpp"
 #include "ui_main.h"

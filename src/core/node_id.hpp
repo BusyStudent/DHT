@@ -7,8 +7,8 @@
 #include <array>
 #include <span>
 #include <bit>
+#include <ilias/net.hpp>
 #include "sha1.h"
-#include "net.hpp"
 
 // NOTE: in (self ^ node).clz() is bigger, the node is more closer to the self
 
@@ -140,15 +140,6 @@ private:
     std::array<uint8_t, 20> mId;
 };
 
-struct NodeEndpoint {
-    NodeId id;
-    IPEndpoint ip;
-
-    auto operator <=>(const NodeEndpoint &) const noexcept = default;
-};
-
-using InfoHash = NodeId; // In Bittorrent
-
 inline auto NodeId::clz() const -> size_t {
     for (size_t i = 0; i < mId.size(); i++) {
         auto num = mId[i];
@@ -278,17 +269,5 @@ struct std::formatter<NodeId> {
     }
     auto format(const NodeId& id, std::format_context &ctx) const {
         return std::format_to(ctx.out(), "{}", id.toHex());
-    }
-};
-
-
-template <>
-struct std::formatter<NodeEndpoint> {
-    constexpr auto parse(std::format_parse_context &ctxt) const {
-        return ctxt.begin();
-    }
-
-    auto format(const NodeEndpoint &endpoint, std::format_context &ctxt) const {
-        return std::format_to(ctxt.out(), "{} :{}", endpoint.id, endpoint.ip);
     }
 };

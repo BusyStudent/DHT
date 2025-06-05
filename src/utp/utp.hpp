@@ -3,8 +3,10 @@
 #include <memory_resource>
 #include <memory>
 #include <ilias/sync.hpp>
-#include "net.hpp"
-#include "../libutp/utp.h"
+#include <ilias/net.hpp>
+#include "utp.h"
+
+using namespace ilias;
 
 class UtpContext {
 public:

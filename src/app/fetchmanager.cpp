@@ -1,7 +1,7 @@
+#include "bt/bt.hpp"
+#include "bt/metafetcher.hpp"
 #include "fetchmanager.hpp"
-#include "metafetcher.hpp"
 #include "log.hpp"
-#include "bt.hpp"
 
 FetchManager::~FetchManager() {
     mScope.cancel(); // Cancel all the tasks

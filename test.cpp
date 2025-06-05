@@ -1,7 +1,7 @@
-#include "src/bencode.hpp"
-#include "src/nodeid.hpp"
-#include "src/route.hpp"
-#include "src/krpc.hpp"
+#include "core/bencode.hpp"
+#include "core/node_id.hpp"
+#include "dht/route.hpp"
+#include "krpc/krpc.hpp"
 #include <gtest/gtest.h>
 
 TEST(Bencode, decode) {

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "net.hpp"
-#include "nodeid.hpp"
-#include "krpc.hpp"
+#include <ilias/net.hpp>
+#include "core/node_id.hpp"
+#include "krpc/krpc.hpp"
 #include <algorithm>
 #include <vector>
 #include <chrono>

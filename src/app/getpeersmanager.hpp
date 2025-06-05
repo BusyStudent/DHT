@@ -10,9 +10,9 @@
  */
 #pragma once
 
-#include "session.hpp"
-#include "nodeid.hpp"
-#include "krpc.hpp"
+#include "dht/session.hpp"
+#include "core/node_id.hpp"
+#include "krpc/krpc.hpp"
 #include <deque>
 #include <map>
 

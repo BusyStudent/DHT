@@ -1,6 +1,6 @@
 #include "metafetcher.hpp"
 #include "log.hpp"
-#include "sha1.h"
+#include "core/sha1.h"
 
 auto MetadataFetcher::fetch() -> IoTask<std::vector<std::byte> > {
     PeerId id {};

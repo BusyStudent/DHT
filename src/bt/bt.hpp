@@ -10,12 +10,14 @@
  */
 #pragma once
 #include <ilias/io/dyn_traits.hpp>
-#include "bencode.hpp"
-#include "nodeid.hpp"
-#include "net.hpp"
+#include <ilias/net.hpp>
+#include "core/bencode.hpp"
+#include "core/node_id.hpp"
+#include "core/info_hash.hpp"
 #include <format>
 #include <array>
 
+using namespace ilias;
 using PeerId = std::array<std::byte, 20>;
 
 enum class BtMessageId : uint8_t {

@@ -11,8 +11,7 @@
 #include <queue>
 
 #include "route.hpp"
-#include "krpc.hpp"
-#include "net.hpp"
+#include "krpc/krpc.hpp"
 
 class DhtSession {
 public:

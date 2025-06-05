@@ -1,12 +1,16 @@
 #pragma once
 
-#include "bencode.hpp"
-#include "nodeid.hpp"
-#include "net.hpp"
+#include "core/bencode.hpp"
+#include "core/node_id.hpp"
+#include "core/info_hash.hpp"
+#include "core/node_endpoint.hpp"
 #include "log.hpp"
+#include <ilias/net.hpp>
 #include <cassert>
 #include <optional>
 #include <format>
+
+using namespace ilias;
 
 enum class MessageType {
     Query,

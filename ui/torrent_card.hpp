@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QWidget>
-#include "../src/torrent.hpp"
+#include "../src/bt/torrent.hpp"
 
 class TorrentCard : public QWidget {
 Q_OBJECT

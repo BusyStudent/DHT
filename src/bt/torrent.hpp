@@ -10,8 +10,8 @@
  */
 #pragma once
 
-#include "bencode.hpp"
-#include "nodeid.hpp"
+#include "core/bencode.hpp"
+#include "core/info_hash.hpp"
 
 /**
  * @brief The Torrent class

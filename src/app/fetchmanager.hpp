@@ -9,11 +9,10 @@
  * 
  */
 #pragma once
+#include "core/info_hash.hpp"
+#include "utp/utp.hpp"
 #include <ilias/sync.hpp>
 #include <functional>
-#include "nodeid.hpp"
-#include "net.hpp"
-#include "utp.hpp"
 #include <map>
 #include <set>
 
